@@ -1,4 +1,4 @@
-const CACHE = 'gap-v1.0.1'; // نسخه کش با نسخه برنامه یکسان شد
+const CACHE = 'gap-v1.0.3'; // نسخه کش آپدیت شد تا تیک‌های جدید شناسایی شوند
 const ASSETS = [
   './',
   './index.html',
@@ -6,7 +6,12 @@ const ASSETS = [
   './script.js',
   './manifest.json',
   './Logo.png',
-  './Font.ttf' // فونت محلی به لیست کش اضافه شد
+  './Font.ttf',
+  // تیک‌های تایید جدید
+  './blue-tick.png',
+  './yellow-tick.png',
+  './green-tick.png',
+  './personal-tick.png'
 ];
 
 self.addEventListener('install', e => {
