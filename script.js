@@ -1,5 +1,5 @@
 /* =========================================================
-   گپ v1.0.2 — Custom Wallpaper, Spacing Fix & Owner Warn
+   گپ v1.0.1 — Global Warner & Profile Fixes
    ========================================================= */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -8,9 +8,9 @@ const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const icon = (n, s = 20) => `<svg width="${s}" height="${s}"><use href="#i-${n}"/></svg>`;
 const KEY = 'pisfon_v3', BACKUP_KEY = 'pisfon_backup_auto', VERSION_KEY = 'pisfon_version';
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.1';
 
-// --- Helper for Date & Badges ---
+// --- تاریخ عضویت (شمسی) ---
 function getPersianDate(ts = Date.now()) {
   try {
     const parts = new Intl.DateTimeFormat('fa-IR', { month: 'long', year: 'numeric' }).formatToParts(new Date(ts));
@@ -19,20 +19,6 @@ function getPersianDate(ts = Date.now()) {
     return `\u200F${month} ${year}`;
   } catch { return 'نامشخص'; }
 }
-
-const BADGES = {
-  blue: { src: 'blue-tick.png', title: 'نشان افراد سرشناس' },
-  yellow: { src: 'yellow-tick.png', title: 'نشان سازمانی' },
-  green: { src: 'green-tick.png', title: 'نشان تجاری' },
-  personal: { src: 'personal-tick.png', title: 'نشان شخصی' }
-};
-
-const vfHTML = (badgeType, s = 20) => {
-  if (!badgeType || !BADGES[badgeType]) return '';
-  return `<img class="vf" src="${BADGES[badgeType].src}" width="${s}" height="${s}" alt="${BADGES[badgeType].title}" loading="lazy">`;
-};
-
-const nameWithVf = (n, badgeType, s = 20) => `${esc(n)}${vfHTML(badgeType, s)}`;
 
 /* ---------- viewport ---------- */
 const setVP = () => {
@@ -54,11 +40,9 @@ document.addEventListener('contextmenu', e => {
 
 /* ---------- constants ---------- */
 const CHANGELOG = [
-  'رفع باگ های گزارش شده',
+  'رفع مشکلات گزارش شده',
   'افزایش سرعت برنامه',
-  'افزوده شدن دکمه برسی اپدیت',
-  'افزوده شدن امکان تنظیم والپیپر چت',
-  'اضافه شدن 3 نشان تایید هویت دیگر'
+  'بهینه سازی برای گوشی های میان رده و پایین رده'
 ];
 const AV_GRADS = [
   ['#ff6b6b','#c92a2a'],['#51cf66','#2b8a3e'],['#ffd43b','#e67700'],['#4dabf7','#1864ab'],
@@ -99,7 +83,7 @@ const emptyAccount = () => ({
   id: 'acc_' + Date.now() + Math.random().toString(36).slice(2, 6),
   name: 'من', username: '', phone: '',
   avatar: { type: 'gradient', value: 3 },
-  coverPhoto: null, badgeType: null, joinedDate: getPersianDate(), chats: [], contacts: []
+  coverPhoto: null, verified: false, joinedDate: getPersianDate(), chats: [], contacts: []
 });
 
 const emptyState = () => ({
@@ -115,27 +99,24 @@ const emptyState = () => ({
 
 function normalizeAccount(acc) {
   if (!acc.id) acc.id = 'acc_' + Date.now() + Math.random().toString(36).slice(2, 6);
-  if (acc.verified && !acc.badgeType) acc.badgeType = 'blue';
-  if (!acc.badgeType) acc.badgeType = null;
-  if (!acc.joinedDate) acc.joinedDate = getPersianDate();
   if (!Array.isArray(acc.chats)) acc.chats = [];
   if (!Array.isArray(acc.contacts)) acc.contacts = [];
   if (acc.coverPhoto === undefined) acc.coverPhoto = null;
+  if (!acc.joinedDate) acc.joinedDate = getPersianDate();
   return acc;
 }
 
 function normalizeChat(c, i) {
   if (!c.avatar) c.avatar = {type:'gradient',value:i % AV_GRADS.length};
-  if (c.verified && !c.badgeType) c.badgeType = 'blue';
-  if (!c.badgeType) c.badgeType = null;
+  if (typeof c.verified !== 'boolean') c.verified = false;
   if (!c.joinedDate) c.joinedDate = getPersianDate(c.createdAt || Date.now());
+  if (c.wallpaper === undefined) c.wallpaper = null;
+  if (c.owner === undefined) c.owner = null;
   if (typeof c.username !== 'string') c.username = '';
   if (typeof c.isPublic !== 'boolean') c.isPublic = c.type === 'channel';
   if (typeof c.draft !== 'string') c.draft = '';
   if (typeof c.description !== 'string') c.description = '';
   if (c.coverPhoto === undefined) c.coverPhoto = null;
-  if (c.wallpaper === undefined) c.wallpaper = null;
-  if (c.owner === undefined) c.owner = null;
   if (!Array.isArray(c.admins)) c.admins = [];
   if (!c.permissions) c.permissions = {sendMessages:'all',editInfo:'all'};
   if (typeof c.joined !== 'boolean') c.joined = true;
@@ -204,7 +185,8 @@ function save() {
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', state.theme || 'dark');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = 'transparent'; // <--- شفافیت نوتیفیکیشن سنتر
+  if (meta) meta.content = state.theme === 'light' ? '#f2f2f7' : '#131313';
+  try { if (typeof activeChatId !== 'undefined' && activeChatId) applyWallpaper(getChat(activeChatId)); } catch {}
 }
 applyTheme();
 
@@ -254,6 +236,8 @@ function avatarContent(e) {
   if (av.type === 'image') return '';
   return esc(initials(e.name));
 }
+const vfHTML = (s = 20) => `<img class="vf" src="blue-tick.png" width="${s}" height="${s}" alt="✓" loading="lazy">`;
+const nameWithVf = (n, v, s = 20) => `${esc(n)}${v ? vfHTML(s) : ''}`;
 
 function renderTopProfile() {
   const el = $('#top-profile-avatar');
@@ -338,6 +322,7 @@ function previewText(c) {
   else if (m.type === 'file') t = '📎 فایل';
   else if (m.type === 'poll') t = '📊 نظرسنجی';
   else if (m.type === 'location') t = '📍 موقعیت';
+  else if (m.type === 'warning') t = '⚠️ اخطار سیستمی';
   else t = m.text;
   if (c.type === 'group' && !m.out && m.sender) t = m.sender + ': ' + t;
   else if (m.out) t = 'شما: ' + t;
@@ -365,7 +350,7 @@ function findByUsername(u) {
   if (inChats) return {entity:inChats, source:'chat'};
   const inAcc = state.accounts.find(a => a.username && normUser(a.username) === low);
   if (inAcc) {
-    return { entity: { name: inAcc.name, username: inAcc.username, avatar: inAcc.avatar, coverPhoto: inAcc.coverPhoto, badgeType: inAcc.badgeType, type: 'private', members: 0 }, source: 'local_account' };
+    return { entity: { name: inAcc.name, username: inAcc.username, avatar: inAcc.avatar, coverPhoto: inAcc.coverPhoto, verified: inAcc.verified, type: 'private', members: 0 }, source: 'local_account' };
   }
   return null;
 }
@@ -399,7 +384,7 @@ function mentionPreview(username) {
   const f = findByUsername(username);
   if (!f) return null;
   const e = f.entity;
-  return {username:e.username, name:e.name, badgeType:e.badgeType, type:e.type, members:e.members||0, source:f.source, id:e.id};
+  return {username:e.username, name:e.name, verified:!!e.verified, type:e.type, members:e.members||0, source:f.source, id:e.id};
 }
 
 /* ---------- AI ---------- */
@@ -431,7 +416,7 @@ function syncMessageToTargetAccount(targetUsername, messageData, senderInfo) {
   if (!targetAcc.chats) targetAcc.chats = [];
   let targetChat = targetAcc.chats.find(c => (c.username && normUser(c.username) === normUser(senderInfo.username)) || c.name === senderInfo.name);
   if (!targetChat) {
-    targetChat = { id: rid(), name: senderInfo.name, username: senderInfo.username, type: 'private', avatar: senderInfo.avatar, coverPhoto: senderInfo.coverPhoto, badgeType: senderInfo.badgeType, unread: 1, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
+    targetChat = { id: rid(), name: senderInfo.name, username: senderInfo.username, type: 'private', avatar: senderInfo.avatar, coverPhoto: senderInfo.coverPhoto, verified: senderInfo.verified, unread: 1, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
     targetAcc.chats.push(targetChat);
   } else {
     targetChat.unread = (targetChat.unread || 0) + 1;
@@ -454,7 +439,7 @@ function findOrCreatePrivateChatWithEntity(account, entity) {
       type: 'private',
       avatar: entity.avatar,
       coverPhoto: entity.coverPhoto || null,
-      badgeType: entity.badgeType || null,
+      verified: !!entity.verified,
       unread: 0,
       pinned: false,
       muted: false,
@@ -463,9 +448,24 @@ function findOrCreatePrivateChatWithEntity(account, entity) {
       createdAt: Date.now(),
       joined: true
     };
+    normalizeChat(chat, account.chats.length);
     account.chats.push(chat);
   }
   return chat;
+}
+
+/* پیدا کردن اکانت محلی (اکانت فعلی یا یکی از اکانت‌های دیگر) از روی آیدی/نام */
+function findLocalAccount(ref) {
+  if (!ref) return null;
+  const all = [state.me, ...(state.accounts || [])];
+  if (ref.username) return all.find(a => a.username && normUser(a.username) === normUser(ref.username)) || null;
+  return all.find(a => !a.username && a.name === ref.name) || null;
+}
+function sameIdentity(a, b) {
+  if (!a || !b) return false;
+  if (a.username && b.username) return normUser(a.username) === normUser(b.username);
+  if (a.username || b.username) return false;
+  return a.name === b.name;
 }
 
 function isWarnerChat(chat) {
@@ -496,7 +496,7 @@ function renderChatList() {
       <div class="chat-item" data-directory="${d.id}" data-chat-type="${d.type}">
         ${avatarHTML(d)}
         <div class="ci-body">
-          <div class="ci-top"><span class="ci-name">${nameWithVf(d.name, d.badgeType, 20)}</span>
+          <div class="ci-top"><span class="ci-name">${nameWithVf(d.name, d.verified, 20)}</span>
           <span class="ci-time" style="font-size:11px">${d.type === 'channel' ? 'کانال' : 'گروه'}</span></div>
           <div class="ci-bot"><span class="ci-prev">${esc(d.description || (d.members ? d.members.toLocaleString('fa-IR')+' عضو' : ''))}</span></div>
         </div>
@@ -551,7 +551,7 @@ function renderChatList() {
       return `<div class="chat-item" data-id="${c.id}" data-chat-type="${c.type}">
         ${avatarHTML(c)}
         <div class="ci-body">
-          <div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.badgeType, 20)}</span>
+          <div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.verified, 20)}</span>
           <span class="ci-time">${m?ticks:''}${m?fmtListTime(lastTs(c)):''}</span></div>
           <div class="ci-bot"><span class="ci-prev">${esc(previewText(c))}</span>${pin}${badge}</div>
         </div>
@@ -571,7 +571,7 @@ function renderContacts() {
   box.innerHTML = state.contacts.map(c => `
     <div class="chat-item" data-contact="${c.id}">
       ${avatarHTML(c)}
-      <div class="ci-body"><div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.badgeType, 20)}</span></div>
+      <div class="ci-body"><div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.verified, 20)}</span></div>
       <div class="ci-bot"><span class="ci-prev">برای شروع گفتگو لمس کن</span></div></div>
     </div>`).join('');
 }
@@ -592,7 +592,7 @@ function renderSettings() {
       <button class="pc-edit-btn" id="btn-edit-profile">${icon('edit',14)} ویرایش</button>
       <div class="avatar big" id="my-avatar-btn" style="${avatarBgStyle(me)}">${avatarContent(me)}</div>
       <div style="text-align:center">
-        <div class="pn">${nameWithVf(me.name, me.badgeType, 26)}</div>
+        <div class="pn">${nameWithVf(me.name, me.verified, 26)}</div>
         <div class="pp" dir="ltr" style="text-align:center">${me.phone ? esc(me.phone) : 'شماره ثبت نشده'}</div>
         ${me.username ? `<div class="info-username" style="margin-top:8px">@${esc(me.username)}</div>` : ''}
       </div>
@@ -602,8 +602,8 @@ function renderSettings() {
       <div class="row" data-act="edit-name"><span class="r-icon">${icon('edit',20)}</span><span class="r-text">نام</span><span class="r-val">${esc(me.name)}</span><span class="chev">${icon('chevron',18)}</span></div>
       <div class="row" data-act="edit-username"><span class="r-icon" style="background:linear-gradient(180deg,#a78bfa,#8b5cf6)">${icon('user',20)}</span><span class="r-text">آیدی من</span><span class="r-val">${me.username ? '@'+esc(me.username) : 'تنظیم نشده'}</span><span class="chev">${icon('chevron',18)}</span></div>
       <div class="row" data-act="edit-phone"><span class="r-icon">${icon('phone',20)}</span><span class="r-text">شماره تلفن</span><span class="r-val" dir="ltr">${me.phone ? esc(me.phone) : '—'}</span><span class="chev">${icon('chevron',18)}</span></div>
-      <div class="row" data-act="set-badge"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">نشان تایید</span><span class="r-val">${me.badgeType ? BADGES[me.badgeType].title : 'بدون نشان'}</span><span class="chev">${icon('chevron',18)}</span></div>
-      <div class="row" data-act="edit-joined"><span class="r-icon">${icon('chart',20)}</span><span class="r-text">تاریخ عضویت</span><span class="r-val">${esc(me.joinedDate || getPersianDate())}</span></div>
+      <div class="row"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">تیک آبی</span><label class="switch"><input type="checkbox" data-me="verified" ${me.verified?'checked':''}><span class="sl"></span></label></div>
+      <div class="row" data-act="edit-joined"><span class="r-icon">${icon('chart',20)}</span><span class="r-text">تاریخ عضویت</span><span class="r-val">${esc(me.joinedDate || getPersianDate())}</span><span class="chev">${icon('chevron',18)}</span></div>
     </div>
     <div class="section-title">مدیریت اکانت‌ها</div>
     <div class="group" style="padding: 14px;">
@@ -649,7 +649,7 @@ function renderAccountsList() {
       <div class="account-info-wrap">
         ${avatarHTML(state.me, 40).replace('class="avatar', 'class="account-avatar-sm avatar')}
         <div>
-          <div class="account-name-sm">${esc(state.me.name)} ${vfHTML(state.me.badgeType, 16)}</div>
+          <div class="account-name-sm">${esc(state.me.name)} ${state.me.verified ? vfHTML(16) : ''}</div>
           <div class="account-handle-sm">${state.me.username ? '@'+state.me.username : 'بدون آیدی'}</div>
         </div>
       </div>
@@ -662,7 +662,7 @@ function renderAccountsList() {
         <div class="account-info-wrap">
           ${avatarHTML(acc, 40).replace('class="avatar', 'class="account-avatar-sm avatar')}
           <div>
-            <div class="account-name-sm">${esc(acc.name)} ${vfHTML(acc.badgeType, 16)}</div>
+            <div class="account-name-sm">${esc(acc.name)} ${acc.verified ? vfHTML(16) : ''}</div>
             <div class="account-handle-sm">${acc.username ? '@'+acc.username : 'بدون آیدی'}</div>
           </div>
         </div>
@@ -717,7 +717,6 @@ $('#btn-save-new-acc').addEventListener('click', () => {
   const newAcc = emptyAccount();
   newAcc.name = name;
   newAcc.username = username;
-  newAcc.joinedDate = getPersianDate();
   newAcc.avatar = { type: 'gradient', value: Math.floor(Math.random() * AV_GRADS.length) };
   state.accounts.push(state.me);
   state.me = newAcc;
@@ -731,42 +730,93 @@ $('#btn-cancel-add-acc').addEventListener('click', () => $('#add-account-modal')
 
 let currentModTargetId = null;
 
+const WARN_TEMPLATES = [
+  { t: 'رعایت نکردن قوانین', x: 'شما قوانین را رعایت نکرده‌اید. لطفاً از ادامه‌ی این رفتار خودداری کنید.' },
+  { t: 'محتوای نامناسب', x: 'محتوای منتشرشده توسط شما نامناسب است و با قوانین مطابقت ندارد.' },
+  { t: 'تبلیغات و اسپم', x: 'ارسال تبلیغات و پیام‌های تکراری ممنوع است. در صورت تکرار، دسترسی شما محدود می‌شود.' },
+  { t: 'توهین', x: 'لطفاً از توهین و بی‌احترامی به دیگران خودداری کنید.' },
+  { t: 'اطلاعات نادرست', x: 'انتشار اطلاعات نادرست و گمراه‌کننده ممنوع است.' }
+];
+
+/* مسیر ارسال اخطار: اخطاردهنده (تنظیم‌شده) ← گیرنده (کاربر یا سازنده‌ی گروه/کانال) */
+function setGlobalWarner(w) {
+  state.globalWarner = w;
+  save();
+  if (typeof activeChatId !== 'undefined' && activeChatId) applyComposerLock(getChat(activeChatId));
+}
+
+function resolveWarnRoute(targetChat) {
+  if (!targetChat) return { error: 'چت هدف پیدا نشد' };
+  if (targetChat.type === 'ai' || targetChat.type === 'saved') return { error: 'به این چت نمی‌توان اخطار داد' };
+  const warner = state.globalWarner;
+  if (!warner || !warner.name) return { error: 'اخطاردهنده تنظیم نشده است. از منوی چت، «تنظیم به عنوان اخطار دهنده» را بزنید.' };
+  const isGC = targetChat.type === 'group' || targetChat.type === 'channel';
+  const recipientRef = isGC
+    ? (targetChat.owner || { name: state.me.name, username: state.me.username || '' })
+    : { name: targetChat.name, username: targetChat.username || '' };
+  const recipient = findLocalAccount(recipientRef);
+  if (!recipient) return { error: isGC ? 'اکانت سازنده این گروه/کانال روی این دستگاه نیست' : 'اکانت این کاربر روی این دستگاه نیست' };
+  if (sameIdentity(recipient, warner)) return { error: 'اخطاردهنده نمی‌تواند به خودش اخطار بدهد' };
+  return { warner, recipient, isGC, targetChat };
+}
+
 function openWarnModal(chatId) {
   currentModTargetId = chatId;
-  $('#warn-reason-input').value = '';
+  const inp = $('#warn-reason-input');
+  inp.value = '';
+  const chat = getChat(chatId);
+  const route = resolveWarnRoute(chat);
+  const box = $('#warn-route');
+  const submit = $('#btn-submit-warn');
+  if (route.error) {
+    box.innerHTML = `<div class="wr-err">${esc(route.error)}</div>`;
+    submit.disabled = true; submit.style.opacity = '.4';
+  } else {
+    const { warner, recipient, isGC } = route;
+    const kind = isGC ? `سازنده‌ی ${chat.type === 'channel' ? 'کانال' : 'گروه'} «${esc(chat.name)}»` : 'کاربر';
+    box.innerHTML = `
+      <div class="wr-row">
+        <div class="wr-node">${avatarHTML(warner, 34)}<div class="wr-t"><b>${esc(warner.name)}</b><small>اخطاردهنده</small></div></div>
+        <span class="wr-arrow">${icon('back', 16)}</span>
+        <div class="wr-node">${avatarHTML(recipient, 34)}<div class="wr-t"><b>${esc(recipient.name)}</b><small>${kind}</small></div></div>
+      </div>
+      <div class="wr-note">در پیوی «${esc(recipient.name)}» به‌صورت پیام دریافتی از «${esc(warner.name)}» نمایش داده می‌شود.</div>`;
+    submit.disabled = false; submit.style.opacity = '';
+  }
+  $('#warn-chips').innerHTML = WARN_TEMPLATES.map((w, i) => `<button type="button" class="wchip" data-wt="${i}">${esc(w.t)}</button>`).join('');
+  $$('#warn-chips .wchip').forEach(b => b.addEventListener('click', () => {
+    inp.value = WARN_TEMPLATES[+b.dataset.wt].x;
+    inp.focus();
+  }));
   $('#warn-modal').classList.add('show');
 }
 
 $('#btn-submit-warn').addEventListener('click', () => {
   const reason = $('#warn-reason-input').value.trim();
   if (!reason) { toast('دلیل اخطار را بنویسید', 'error'); return; }
+  const closeModal = () => $('#warn-modal').classList.remove('show');
 
   const targetChat = getChat(currentModTargetId);
-  if (!targetChat) {
-    $('#warn-modal').classList.remove('show');
-    toast('چت هدف پیدا نشد', 'error');
-    return;
-  }
+  const route = resolveWarnRoute(targetChat);
+  if (route.error) { closeModal(); toast(route.error, 'error'); return; }
+  const { warner, recipient } = route;
 
-  const warner = state.globalWarner || {
-    name: state.me.name,
-    username: state.me.username,
-    avatar: state.me.avatar,
-    badgeType: state.me.badgeType
-  };
-
-  const isWarnerMe = warner.username
-    ? normUser(warner.username) === normUser(state.me.username)
-    : warner.name === state.me.name;
-
-  const warnText = `⚠️ اخطار: ${reason}`;
-
-  const buildMsg = (out) => ({
+  /* ۳) فقط در پیوی «گیرنده با اخطاردهنده» ذخیره می‌شود. در پیوی نویسنده‌ی اخطار و پیوی اخطاردهنده چیزی نمی‌رود */
+  const chatInRecipient = findOrCreatePrivateChatWithEntity(recipient, {
+    name: warner.name,
+    username: warner.username || '',
+    avatar: warner.avatar,
+    verified: !!warner.verified,
+    coverPhoto: warner.coverPhoto || null
+  });
+  chatInRecipient.messages.push({
     id: rid(),
-    text: warnText,
-    out,
+    text: `⚠️ اخطار: ${reason}`,
+    warnReason: reason,
+    warnBy: warner.name,
+    out: false,
     ts: Date.now(),
-    status: out ? 'sent' : 'read',
+    status: 'read',
     type: 'text',
     isWarning: true,
     replyTo: null,
@@ -778,136 +828,13 @@ $('#btn-submit-warn').addEventListener('click', () => {
     linkPreview: null,
     _fakeReactionCounts: {}
   });
-
-  const isGC = targetChat.type === 'group' || targetChat.type === 'channel';
-
-  /* ============ گروه / کانال: اخطار به سازنده (خصوصی) ============ */
-  if (isGC) {
-    const owner = targetChat.owner || { name: state.me.name, username: state.me.username || '' };
-    const ownerIsMe = owner.username
-      ? normUser(owner.username) === normUser(state.me.username)
-      : owner.name === state.me.name;
-
-    if (isWarnerMe) {
-      if (ownerIsMe) {
-        toast('شما خودتان سازنده این گروه/کانال هستید', 'info');
-        $('#warn-modal').classList.remove('show');
-        return;
-      }
-
-      let ownerAccount = null;
-      if (owner.username) {
-        ownerAccount = state.accounts.find(a => normUser(a.username) === normUser(owner.username));
-      }
-      if (!ownerAccount) {
-        ownerAccount = state.accounts.find(a => a.name === owner.name);
-      }
-
-      if (!ownerAccount) {
-        toast('سازنده گروه/کانال در این دستگاه پیدا نشد', 'error');
-        $('#warn-modal').classList.remove('show');
-        return;
-      }
-
-      // پیام فقط در چت سازنده با من ذخیره می‌شود (دریافتی)
-      const chatInOwner = findOrCreatePrivateChatWithEntity(ownerAccount, {
-        name: state.me.name,
-        username: state.me.username || '',
-        avatar: state.me.avatar,
-        badgeType: state.me.badgeType,
-        coverPhoto: state.me.coverPhoto
-      });
-      chatInOwner.messages.push(buildMsg(false));
-      chatInOwner.unread = (chatInOwner.unread || 0) + 1;
-
-      // در چت خودم با سازنده چیزی نمایش داده نمی‌شود
-
-    } else {
-      if (!ownerIsMe) {
-        toast('این اخطار برای شما نیست', 'error');
-        $('#warn-modal').classList.remove('show');
-        return;
-      }
-
-      // من سازنده‌ام و اخطار از طرف یک اکانت دیگر آمده
-      const chatInMe = findOrCreatePrivateChatWithEntity(state.me, warner);
-      chatInMe.messages.push(buildMsg(false));
-      chatInMe.unread = (chatInMe.unread || 0) + 1;
-
-      if (warner.username) {
-        const warnerAcc = state.accounts.find(a => normUser(a.username) === normUser(warner.username));
-        if (warnerAcc) {
-          const chatInWarner = findOrCreatePrivateChatWithEntity(warnerAcc, {
-            name: state.me.name,
-            username: state.me.username || '',
-            avatar: state.me.avatar,
-            badgeType: state.me.badgeType,
-            coverPhoto: state.me.coverPhoto
-          });
-          chatInWarner.messages.push(buildMsg(true));
-        }
-      }
-    }
-
-    save();
-    renderChatList();
-    if (activeChatId) renderMessages(false);
-    $('#warn-modal').classList.remove('show');
-    toast('اخطار به سازنده گروه/کانال ارسال شد ✓', 'success');
-    return;
-  }
-
-  /* ============ چت خصوصی ============ */
-  if (isWarnerMe) {
-    // من اخطار دهنده‌ام → فقط در چت کاربر مقصد ذخیره می‌شود، نه در چت خودم
-    let sent = false;
-    if (targetChat.username) {
-      const targetAcc = state.accounts.find(a => normUser(a.username) === normUser(targetChat.username));
-      if (targetAcc) {
-        const chatInTarget = findOrCreatePrivateChatWithEntity(targetAcc, {
-          name: state.me.name,
-          username: state.me.username || '',
-          avatar: state.me.avatar,
-          badgeType: state.me.badgeType,
-          coverPhoto: state.me.coverPhoto
-        });
-        chatInTarget.messages.push(buildMsg(false));
-        chatInTarget.unread = (chatInTarget.unread || 0) + 1;
-        sent = true;
-      }
-    }
-    if (!sent) {
-      toast('امکان ارسال اخطار به این کاربر وجود ندارد (اکانت مقصد در این دستگاه نیست)', 'error');
-      $('#warn-modal').classList.remove('show');
-      return;
-    }
-  } else {
-    // من گیرنده‌ام و اخطار از طرف دیگری آمده → در چت خودم دریافتی
-    targetChat.messages.push(buildMsg(false));
-    targetChat.unread = (targetChat.unread || 0) + 1;
-
-    if (warner.username) {
-      const warnerAcc = state.accounts.find(a => normUser(a.username) === normUser(warner.username));
-      if (warnerAcc) {
-        const chatInWarner = findOrCreatePrivateChatWithEntity(warnerAcc, {
-          name: state.me.name,
-          username: state.me.username || '',
-          avatar: state.me.avatar,
-          badgeType: state.me.badgeType,
-          coverPhoto: state.me.coverPhoto
-        });
-        chatInWarner.messages.push(buildMsg(true));
-      }
-    }
-  }
+  chatInRecipient.unread = (chatInRecipient.unread || 0) + 1;
 
   save();
   renderChatList();
-  if (activeChatId === targetChat.id) renderMessages(false);
-  if (infoChatId === targetChat.id) renderInfo();
-
-  $('#warn-modal').classList.remove('show');
-  toast(`اخطار از طرف «${warner.name}» ارسال شد ✓`, 'success');
+  if (activeChatId && activeChatId === chatInRecipient.id) renderMessages(false);
+  closeModal();
+  toast(`اخطار از طرف «${warner.name}» برای «${recipient.name}» ارسال شد ✓`, 'success');
 });
 
 $('#btn-cancel-warn').addEventListener('click', () => $('#warn-modal').classList.remove('show'));
@@ -997,7 +924,7 @@ function simulatePollVotes(chat, pollMsg) {
 function msgHTML(chat, m, prevMsg, nextMsg) {
   const isNew = !renderedIds.has(m.id);
   renderedIds.add(m.id);
-  const cls = `msg ${m.out?'out':'in'}${isNew?'':' no-anim'}${(chat.type==='ai'&&!m.out)?' ai':''}${msgSearchHits.includes(m.id)?' search-hit':''}`;
+  const cls = `msg ${m.out?'out':'in'}${isNew?'':' no-anim'}${(chat.type==='ai'&&!m.out)?' ai':''}${(m.type === 'warning' || m.isWarning)?' warning':''}${msgSearchHits.includes(m.id)?' search-hit':''}`;
   let inner = '';
 
   if (m.replyTo) {
@@ -1018,6 +945,15 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
 
   if (m.deleted) {
     inner += `<div class="btext msg-deleted">🚫 این پیام حذف شد</div>`;
+  } else if (m.type === 'warning' || m.isWarning) {
+    const reasonTxt = (m.warnReason !== undefined ? m.warnReason : String(m.text || '').replace(/^⚠️\s*اخطار:\s*/, ''));
+    const wDate = new Date(m.ts).toLocaleDateString('fa-IR', { day: 'numeric', month: 'long', year: 'numeric' });
+    inner += `
+      <div class="warn-card">
+        <div class="wc-top"><span class="wc-badge">${icon('alert',14)} اخطار</span><span class="wc-when">${wDate} · ${fmtTime(m.ts)}</span></div>
+        <div class="wc-reason">${esc(reasonTxt)}</div>
+      </div>
+    `;
   } else if (m.type === 'photo') {
     if (m.dataUrl) inner += `<div class="media" style="background:#000"><img src="${esc(m.dataUrl)}" alt="">${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
     else inner += `<div class="media" style="background:${m.bg||'linear-gradient(135deg,#667eea,#764ba2)'}">${icon('camera',56)}${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
@@ -1050,13 +986,13 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
     const mention = firstMention(m.text);
     if (mention) {
       const mp = mentionPreview(mention);
-      if (mp) inner += `<a class="mention-preview" data-mention-preview="${esc(mp.username)}"><div class="mp-header"><div class="mp-avatar" style="${avatarBgStyle({name:mp.name})}">${esc(initials(mp.name))}</div><span class="mp-name">${esc(mp.name)}${mp.badgeType?vfHTML(mp.badgeType,15):''}</span></div><span class="mp-sub">@${esc(mp.username)} · ${mp.type==='channel'?'کانال':mp.type==='group'?'گروه':'کاربر'}</span></a>`;
+      if (mp) inner += `<a class="mention-preview" data-mention-preview="${esc(mp.username)}"><div class="mp-header"><div class="mp-avatar" style="${avatarBgStyle({name:mp.name})}">${esc(initials(mp.name))}</div><span class="mp-name">${esc(mp.name)}${mp.verified?vfHTML(15):''}</span></div><span class="mp-sub">@${esc(mp.username)} · ${mp.type==='channel'?'کانال':mp.type==='group'?'گروه':'کاربر'}</span></a>`;
     }
   }
   inner += renderReactions(m);
 
   let ticks = '';
-  if (m.out && !m.deleted) {
+  if (m.out && !m.deleted && m.type !== 'warning') {
     if (m.status === 'read') ticks = `<span class="ticks read">${icon('double-check',15)}</span>`;
     else if (m.status === 'delivered') ticks = `<span class="ticks">${icon('double-check',15)}</span>`;
     else ticks = `<span class="ticks">${icon('check',15)}</span>`;
@@ -1065,7 +1001,7 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
   const seen = (chat.type === 'channel' && m.out && (m.seenCount || m.seenTarget)) ? `<span class="msg-seen">${icon('eye',13)} ${fmtNum(m.seenCount||0)}</span>` : '';
   const msgInner = `${inner}<div class="meta"><span>${metaText}</span>${seen}${ticks}</div>`;
 
-  if (chat.type === 'group' && !m.out) {
+  if (chat.type === 'group' && !m.out && m.type !== 'warning') {
     const sender = m.sender || 'عضو';
     const sameBefore = prevMsg && !prevMsg.out && prevMsg.sender === sender;
     const sameAfter = nextMsg && !nextMsg.out && nextMsg.sender === sender;
@@ -1154,14 +1090,14 @@ function renderChatHeader() {
     }
   }
   const nameEl = $('#chat-name');
-  if (nameEl) nameEl.innerHTML = nameWithVf(c.name, c.badgeType, 20);
+  if (nameEl) nameEl.innerHTML = nameWithVf(c.name, c.verified, 20);
   const status = $('#chat-status');
   if (status) { status.textContent = chatStatus(c); status.style.color = c.typing ? 'var(--green)' : ''; }
 }
 
-/* ---------- Wallpaper & Open/Close ---------- */
-const DEFAULT_WALLPAPER_SVG = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="100%" height="100%" fill="#131313"/><g fill="#ffffff" fill-opacity="0.04"><path d="M50 50l10-10 10 10-10 10zM150 100l15-15 15 15-15 15zM300 80l20-20 20 20-20 20zM80 250l15-15 15 15-15 15zM250 300l20-20 20 20-20 20zM350 200l10-10 10 10-10 10zM100 350l10-10 10 10-10 10zM200 180l12-12 12 12-12 12z"/><circle cx="200" cy="50" r="20"/><circle cx="50" cy="150" r="15"/><circle cx="350" cy="350" r="25"/><circle cx="300" cy="150" r="10"/><circle cx="100" cy="280" r="18"/></g></svg>')}`;
-
+/* ---------- Wallpaper ---------- */
+const WP_SHAPES = '<path d="M50 50l10-10 10 10-10 10zM150 100l15-15 15 15-15 15zM300 80l20-20 20 20-20 20zM80 250l15-15 15 15-15 15zM250 300l20-20 20 20-20 20zM350 200l10-10 10 10-10 10zM100 350l10-10 10 10-10 10zM200 180l12-12 12 12-12 12z"/><circle cx="200" cy="50" r="20"/><circle cx="50" cy="150" r="15"/><circle cx="350" cy="350" r="25"/><circle cx="300" cy="150" r="10"/><circle cx="100" cy="280" r="18"/>';
+const wpSvg = col => `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><g fill="' + col + '" fill-opacity="0.045">' + WP_SHAPES + '</g></svg>')}`;
 function applyWallpaper(chat) {
   const box = $('#messages');
   if (!box) return;
@@ -1171,7 +1107,7 @@ function applyWallpaper(chat) {
     box.style.backgroundPosition = 'center';
     box.style.backgroundRepeat = 'no-repeat';
   } else {
-    box.style.backgroundImage = `url("${DEFAULT_WALLPAPER_SVG}")`;
+    box.style.backgroundImage = `url("${wpSvg(state.theme === 'light' ? '#000000' : '#ffffff')}")`;
     box.style.backgroundSize = 'auto';
     box.style.backgroundPosition = 'top left';
     box.style.backgroundRepeat = 'repeat';
@@ -1211,6 +1147,23 @@ function openWallpaperPicker(chat) {
   }));
 }
 
+/* قفل نوار پیام در پیوی اخطاردهنده: هیچ نوع پیامی (متن، عکس، فایل، صدا، نظرسنجی...) ارسال نمی‌شود */
+function applyComposerLock(c) {
+  const composer = $('#composer'), inp = $('#msg-input');
+  if (!composer || !inp) return;
+  const locked = !!c && isWarnerChat(c);
+  composer.classList.toggle('warner-blocked', locked);
+  inp.disabled = locked;
+  inp.placeholder = locked ? 'امکان ارسال پیام به این کاربر وجود ندارد' : 'پیام';
+  ['#btn-send', '#btn-photo', '#btn-file', '#btn-poll', '#btn-emoji'].forEach(id => { const el = $(id); if (el) el.style.display = locked ? 'none' : ''; });
+  if (locked) {
+    inp.value = '';
+    const st = $('#btn-send-text'); if (st) st.classList.remove('show');
+    try { hideReplyBar(); } catch {}
+  }
+}
+
+/* ---------- open/close ---------- */
 function openChat(id) {
   const c = getChat(id);
   if (!c) return;
@@ -1223,32 +1176,8 @@ function openChat(id) {
   $('#screen-chat').classList.add('open');
   const inp = $('#msg-input');
 
-  const isWarner = isWarnerChat(c);
-  const composer = $('#composer');
-
-  if (isWarner) {
-    composer.classList.add('warner-blocked');
-    inp.disabled = true;
-    inp.value = '';
-    inp.placeholder = 'امکان ارسال پیام به این کاربر وجود ندارد';
-    $('#btn-send').style.display = 'none';
-    $('#btn-photo').style.display = 'none';
-    $('#btn-file').style.display = 'none';
-    $('#btn-poll').style.display = 'none';
-    $('#btn-emoji').style.display = 'none';
-    $('#btn-send-text').classList.remove('show');
-  } else {
-    composer.classList.remove('warner-blocked');
-    inp.disabled = false;
-    inp.placeholder = 'پیام';
-    $('#btn-send').style.display = '';
-    $('#btn-photo').style.display = '';
-    $('#btn-file').style.display = '';
-    $('#btn-poll').style.display = '';
-    $('#btn-emoji').style.display = '';
-    if (inp) { inp.value = c.draft || ''; autoGrow(); }
-  }
-
+  applyComposerLock(c);
+  if (inp && !isWarnerChat(c)) { inp.value = c.draft || ''; autoGrow(); }
   updateSendBtnState();
   save();
 }
@@ -1291,14 +1220,13 @@ function renderInfo() {
 
   let badges = '';
   if (isGC) badges += `<div class="info-badge ${isPublic?'public':'private'}" data-info-act="toggle-public">${isPublic?icon('globe',14)+' عمومی':icon('lock',14)+' خصوصی'}</div>`;
-  if (c.badgeType) badges += `<div class="info-badge verified">${vfHTML(c.badgeType, 14)} ${BADGES[c.badgeType].title}</div>`;
+  if (c.verified) badges += `<div class="info-badge verified">${icon('verified',14)} تأیید شده</div>`;
 
+  let joinedDate = `<div class="info-stat">${icon('chart',16)} عضو شده در ${esc(c.joinedDate || getPersianDate())}</div>`;
   let stats = '';
   if (isGC) stats = `<div class="info-stat editable" data-info-act="edit-members">${icon('users',16)} <b>${(c.members||0).toLocaleString('fa-IR')}</b> عضو</div>`;
   else if (c.type === 'private') stats = `<div class="info-stat">${icon(c.online?'chat-outline':'phone',16)} ${c.online?'آنلاین':'آخرین بازدید به تازگی'}</div>`;
   else if (c.type === 'ai') stats = `<div class="info-stat">${icon(navigator.onLine?'sparkle':'chat-outline',16)} ${navigator.onLine?'آنلاین — پاسخ هوشمند':'آفلاین'}</div>`;
-
-  let joinedDate = `<div class="info-stat">${icon('chart',16)} عضو شده در ${esc(c.joinedDate || getPersianDate())}</div>`;
 
   const cover = `<div class="info-cover ${c.coverPhoto?'':'empty'}" data-info-act="edit-cover" style="${c.coverPhoto?`background-image:url(&quot;${esc(c.coverPhoto)}&quot;)`:''}">${c.coverPhoto?'':icon('camera',22)+' افزودن کاور'}</div>`;
   const desc = isGC ? `<div class="group"><div class="row" data-info-act="edit-description" style="cursor:pointer"><span class="r-icon">${icon('file',20)}</span><span class="r-text" style="flex:1;white-space:normal;line-height:1.5">${c.description?esc(c.description):'<span style="color:var(--text-3)">+ افزودن توضیحات</span>'}</span></div></div>` : '';
@@ -1320,7 +1248,7 @@ function renderInfo() {
       <div class="row" data-info-act="edit-name"><span class="r-icon">${icon('edit',20)}</span><span class="r-text">نام</span><span class="r-val">${esc(c.name)}</span><span class="chev">${icon('chevron',18)}</span></div>
       <div class="row" data-info-act="edit-username"><span class="r-icon">${icon('user',20)}</span><span class="r-text">آیدی</span><span class="r-val">${username?'@'+esc(username):'—'}</span><span class="chev">${icon('chevron',18)}</span></div>
       ${isGC ? `<div class="row" data-info-act="toggle-public"><span class="r-icon">${icon(isPublic?'globe':'lock',20)}</span><span class="r-text">نوع</span><span class="r-val">${isPublic?'عمومی':'خصوصی'}</span><span class="chev">${icon('chevron',18)}</span></div><div class="row" data-info-act="edit-members"><span class="r-icon">${icon('users',20)}</span><span class="r-text">تعداد اعضا</span><span class="r-val">${(c.members||0).toLocaleString('fa-IR')}</span><span class="chev">${icon('chevron',18)}</span></div>` : ''}
-      <div class="row" data-info-act="set-badge"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">نشان تایید</span><span class="r-val">${c.badgeType ? BADGES[c.badgeType].title : 'بدون نشان'}</span><span class="chev">${icon('chevron',18)}</span></div>
+      <div class="row"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">تیک آبی</span><label class="switch"><input type="checkbox" id="info-verified-sw" ${c.verified?'checked':''}><span class="sl"></span></label></div>
     </div>` : '';
 
   const permsGrp = isGC ? `
@@ -1333,7 +1261,7 @@ function renderInfo() {
   const joinLeave = isGC ? `<div class="profile-actions">${isJoined?`<button class="btn-leave" data-info-act="leave-chat">${icon('logout',18)} ترک</button>`:`<button class="btn-join" data-info-act="join-chat">${icon('login',18)} عضویت</button>`}</div>` : '';
 
   $('#info-body').innerHTML = `
-    <div class="info-hero has-cover">${cover}<div class="avatar big info-avatar-overlay" id="info-avatar-btn" style="${avatarBgStyle(c)}">${avatarContent(c)}</div><div class="info-name">${esc(c.name)}${vfHTML(c.badgeType,26)}</div>${uBlock}${badges?`<div class="info-badges">${badges}</div>`:''}${stats}${joinedDate}</div>
+    <div class="info-hero has-cover">${cover}<div class="avatar big info-avatar-overlay" id="info-avatar-btn" style="${avatarBgStyle(c)}">${avatarContent(c)}</div><div class="info-name">${esc(c.name)}${c.verified?vfHTML(26):''}</div>${uBlock}${badges?`<div class="info-badges">${badges}</div>`:''}${stats}${joinedDate}</div>
     ${desc}${settingsGrp}${permsGrp}${membersList}${joinLeave}
     <div class="section-title">عملیات</div>
     <div class="group">
@@ -1344,6 +1272,8 @@ function renderInfo() {
     <div class="empty" style="padding:20px 40px 40px;font-size:12px;opacity:.55">شناسه: ${esc(c.id)}<br>ساخته شده در ${new Date(c.createdAt||Date.now()).toLocaleDateString('fa-IR')}</div>
   `;
 
+  const vSw = $('#info-verified-sw');
+  if (vSw) vSw.addEventListener('change', () => { c.verified = vSw.checked; renderInfo(); renderChatList(); renderChatHeader(); save(); toast(c.verified?'تیک آبی فعال شد':'تیک آبی غیرفعال شد'); });
   $$('#info-body [data-info-act]').forEach(el => el.addEventListener('click', e => {
     if (e.target.tagName === 'INPUT' || e.target.closest('label.switch')) return;
     handleInfoAction(el.dataset.infoAct, c);
@@ -1463,23 +1393,6 @@ function handleInfoAction(act, c) {
       c.username = u; renderInfo(); save(); toast('ذخیره شد: @'+u);
     }, {ltr:true}); return;
   }
-  if (act === 'set-badge') {
-    openSheet(`
-      <div class="sheet-title">انتخاب نشان تایید</div>
-      <div class="sheet-item" data-badge="none">${icon('ban')}بدون نشان</div>
-      <div class="sheet-item" data-badge="blue">${vfHTML('blue', 20)} نشان افراد سرشناس</div>
-      <div class="sheet-item" data-badge="yellow">${vfHTML('yellow', 20)} نشان سازمانی</div>
-      <div class="sheet-item" data-badge="green">${vfHTML('green', 20)} نشان تجاری</div>
-      <div class="sheet-item" data-badge="personal">${vfHTML('personal', 20)} نشان شخصی</div>
-    `);
-    $$('#sheet-content [data-badge]').forEach(b => b.addEventListener('click', () => {
-      const bType = b.dataset.badge;
-      c.badgeType = bType === 'none' ? null : bType;
-      closeSheet(); renderInfo(); renderChatList(); renderChatHeader(); save();
-      toast('نشان تغییر کرد', 'success');
-    }));
-    return;
-  }
   if (act === 'toggle-public') { c.isPublic = !c.isPublic; renderInfo(); save(); toast(c.isPublic?'عمومی':'خصوصی'); return; }
   if (act === 'edit-members') {
     showPrompt('تعداد اعضا', String(c.members||0), v => {
@@ -1536,14 +1449,14 @@ function openProfilePreview(username) {
 
   let badges = '';
   if (isGC) badges += `<div class="info-badge ${e.isPublic?'public':'private'}">${e.isPublic?icon('globe',14)+' عمومی':icon('lock',14)+' خصوصی'}</div>`;
-  if (e.badgeType) badges += `<div class="info-badge verified">${vfHTML(e.badgeType, 14)} ${BADGES[e.badgeType].title}</div>`;
+  if (e.verified) badges += `<div class="info-badge verified">${icon('verified',14)} تأیید شده</div>`;
 
+  let joinedDate = `<div class="info-stat">${icon('chart',16)} عضو شده در ${esc(e.joinedDate || getPersianDate())}</div>`;
   let stats = '';
   if (isGC) stats = `<div class="info-stat">${icon('users',16)} <b>${(e.members||0).toLocaleString('fa-IR')}</b> عضو</div>`;
   else if (e.type === 'private') stats = `<div class="info-stat">${icon(e.online?'chat-outline':'phone',16)} ${e.online?'آنلاین':'آخرین بازدید به تازگی'}</div>`;
 
-  let joinedDate = `<div class="info-stat">${icon('chart',16)} عضو شده در ${esc(e.joinedDate || getPersianDate())}</div>`;
-
+  // پیش‌نمایش آیدی - همیشه نشون بده
   const uBlock = e.username
     ? `<div class="info-username" id="pp-username" style="cursor:pointer" title="برای کپی کلیک کنید">@${esc(e.username)}</div>`
     : `<div class="info-username empty" style="cursor:default">بدون آیدی</div>`;
@@ -1566,7 +1479,7 @@ function openProfilePreview(username) {
     <div class="info-hero has-cover">
       ${cover}
       <div class="avatar big info-avatar-overlay" style="${avatarBgStyle(e)}">${avatarContent(e)}</div>
-      <div class="info-name">${esc(e.name)}${vfHTML(e.badgeType,26)}</div>
+      <div class="info-name">${esc(e.name)}${e.verified?vfHTML(26):''}</div>
       ${uBlock}
       ${badges?`<div class="info-badges">${badges}</div>`:''}
       ${stats}
@@ -1584,6 +1497,7 @@ function openProfilePreview(username) {
   `;
   $('#screen-profile').classList.add('open');
 
+  // کلیک روی آیدی برای کپی
   const uEl = $('#pp-username');
   if (uEl && e.username) {
     uEl.onclick = () => {
@@ -1612,7 +1526,7 @@ function openProfilePreview(username) {
   if (mb) mb.onclick = () => {
     let chat = state.chats.find(c => c.username && normUser(c.username) === normUser(e.username));
     if (!chat) {
-      chat = { id: rid(), name: e.name, username: e.username, type: 'private', avatar: e.avatar, coverPhoto: e.coverPhoto, badgeType: e.badgeType, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
+      chat = { id: rid(), name: e.name, username: e.username, type: 'private', avatar: e.avatar, coverPhoto: e.coverPhoto, verified: e.verified, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
       state.chats.push(chat);
     }
     save(); closeProfilePreview(); renderChatList(); openChat(chat.id);
@@ -1623,7 +1537,7 @@ function openProfilePreview(username) {
       state.globalWarner = null;
       toast('از لیست اخطار دهنده‌ها حذف شد', 'info');
     } else {
-      state.globalWarner = { name: e.name, username: e.username || '', avatar: e.avatar, badgeType: e.badgeType };
+      state.globalWarner = { name: e.name, username: e.username || '', avatar: e.avatar };
       toast(`«${e.name}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
     }
     save();
@@ -1764,12 +1678,7 @@ function toggleReaction(m, emoji, chat) {
 function sendMessage(extra = {}, textOverride) {
   const chat = getChat(activeChatId);
   if (!chat) return;
-
-  if (isWarnerChat(chat)) {
-    toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error');
-    return;
-  }
-
+  if (isWarnerChat(chat)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; }
   const inp = $('#msg-input');
   const text = textOverride !== undefined ? textOverride : (inp ? inp.value.trim() : '');
   if (!text && !extra.type) return;
@@ -1955,11 +1864,7 @@ let recInterval = null, recStart = 0, recActive = false;
 let mediaRecorder = null, chunks = [], stream = null;
 
 async function startRec() {
-  const chat = getChat(activeChatId);
-  if (chat && isWarnerChat(chat)) {
-    toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error');
-    return;
-  }
+  { const _c = getChat(activeChatId); if (_c && isWarnerChat(_c)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; } }
   recActive = true; recStart = Date.now(); chunks = [];
   $('#composer').style.display = 'none';
   $('#rec-bar').classList.add('show');
@@ -2144,13 +2049,14 @@ function showMsgMenu(el) {
   el.classList.add('selected');
   setTimeout(() => el.classList.remove('selected'), 400);
   let items = `<div class="sheet-item" data-mact="reply">${icon('reply')}پاسخ</div>`;
-  items += `<div class="sheet-item" data-mact="react">${icon('smile')}واکنش</div>`;
+  if (m.type !== 'warning') {
+    items += `<div class="sheet-item" data-mact="react">${icon('smile')}واکنش</div>`;
+  }
   if (m.type === 'text' && !m.deleted) items += `<div class="sheet-item" data-mact="copy">${icon('copy')}کپی</div>`;
   if (m.out && m.type === 'text' && !m.deleted) items += `<div class="sheet-item" data-mact="edit">${icon('edit')}ویرایش</div>`;
   if (!m.deleted && chat.type !== 'saved') items += `<div class="sheet-item" data-mact="save">${icon('bookmark')}ذخیره</div>`;
   items += `<div class="sheet-item" data-mact="forward">${icon('forward')}هدایت</div>`;
   if (chat.type !== 'ai' && chat.type !== 'saved') {
-    items += `<div class="sheet-item" data-mact="give-badge">${icon('verified')}دادن نشان تایید</div>`;
     items += `<div class="sheet-item" data-mact="warn" style="color:#f59e0b">${icon('alert')}ارسال اخطار</div>`;
     items += `<div class="sheet-item" data-mact="set-warner">${icon('user')}تنظیم به عنوان اخطار دهنده</div>`;
     items += `<div class="sheet-item danger" data-mact="ban">${icon('ban')}بن کردن</div>`;
@@ -2182,7 +2088,7 @@ function copyClip(text) {
 function saveToSaved(chat, m) {
   let saved = state.chats.find(c => c.type === 'saved');
   if (!saved) {
-    saved = { id:'saved_msgs', name:'پیام‌های ذخیره‌شده', type:'saved', avatar:{type:'gradient',value:6}, badgeType:null, username:'', isPublic:false, unread:0, pinned:false, muted:false, draft:'', joined:true, createdAt:Date.now(), messages:[] };
+    saved = { id:'saved_msgs', name:'پیام‌های ذخیره‌شده', type:'saved', avatar:{type:'gradient',value:6}, verified:false, username:'', isPublic:false, unread:0, pinned:false, muted:false, draft:'', joined:true, createdAt:Date.now(), messages:[] };
     state.chats.push(saved);
   }
   saved.messages.push({
@@ -2210,6 +2116,7 @@ function handleMsgAction(act, chat, m) {
     openSheet(`<div class="sheet-title">هدایت به…</div>` + state.chats.map(c => `<div class="sheet-item" data-fwd="${c.id}">${avatarHTML(c,38)}${esc(c.name)}</div>`).join(''));
     $$('#sheet-content [data-fwd]').forEach(b => b.addEventListener('click', () => {
       const t = getChat(b.dataset.fwd);
+      if (t && isWarnerChat(t)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; }
       t.messages.push({ id:rid(), text:m.text, out:true, ts:Date.now(), status:'sent', type:m.type, replyTo:null, dur:m.dur, bg:m.bg, size:m.size, dataUrl:m.dataUrl, forwarded:true, originalSender:m.sender||null, poll:m.poll, reactions:{}, deleted:false, editedForAll:false, seenCount:0, seenTarget:0, linkPreview:m.linkPreview||null, _fakeReactionCounts:{} });
       closeSheet(); renderChatList(); save(); toast('هدایت شد', 'success');
     })); return;
@@ -2218,26 +2125,9 @@ function handleMsgAction(act, chat, m) {
   if (act === 'set-warner') {
     const targetName = m.sender || chat.name;
     const targetUsername = m.sender ? '' : (chat.username || '');
-    state.globalWarner = { name: targetName, username: targetUsername, avatar: m.senderAvatar || chat.avatar, badgeType: m.senderBadge || chat.badgeType };
+    setGlobalWarner({ name: targetName, username: targetUsername, avatar: m.senderAvatar || chat.avatar, verified: m.sender ? false : !!chat.verified });
     save();
     toast(`«${targetName}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
-    return;
-  }
-  if (act === 'give-badge') {
-    openSheet(`
-      <div class="sheet-title">انتخاب نشان تایید</div>
-      <div class="sheet-item" data-badge="none">${icon('ban')}بدون نشان</div>
-      <div class="sheet-item" data-badge="blue">${vfHTML('blue', 20)} نشان افراد سرشناس</div>
-      <div class="sheet-item" data-badge="yellow">${vfHTML('yellow', 20)} نشان سازمانی</div>
-      <div class="sheet-item" data-badge="green">${vfHTML('green', 20)} نشان تجاری</div>
-      <div class="sheet-item" data-badge="personal">${vfHTML('personal', 20)} نشان شخصی</div>
-    `);
-    $$('#sheet-content [data-badge]').forEach(b => b.addEventListener('click', () => {
-      const bType = b.dataset.badge;
-      if (chat.type === 'private') chat.badgeType = bType === 'none' ? null : bType;
-      closeSheet(); renderMessages(false); renderChatList(); save();
-      toast('نشان داده شد', 'success');
-    }));
     return;
   }
   if (act === 'ban') { banUser(chat.id); return; }
@@ -2335,7 +2225,7 @@ function showChatMenu(id) {
   const c = getChat(id);
   if (!c) return;
   let items = `<div class="sheet-item" data-clact="open">${icon('chat-outline')}باز کردن</div>`;
-  if (c.type !== 'ai' && c.type !== 'saved') items += `<div class="sheet-item" data-clact="verified">${icon('verified')}تغییر نشان تایید</div>`;
+  if (c.type !== 'ai' && c.type !== 'saved') items += `<div class="sheet-item" data-clact="verified">${icon('verified')}${c.verified?'برداشتن تیک':'دادن تیک'}</div>`;
   items += `<div class="sheet-item" data-clact="pin">${icon('pin')}${c.pinned?'برداشتن سنجاق':'سنجاق'}</div>`;
   items += `<div class="sheet-item" data-clact="mute">${icon(c.muted?'bell':'bell-off')}${c.muted?'فعال کردن اعلان':'بی‌صدا'}</div>`;
   items += `<div class="sheet-item" data-clact="info">${icon('user')}اطلاعات</div>`;
@@ -2352,30 +2242,14 @@ function showChatMenu(id) {
     closeSheet();
     setTimeout(() => {
       if (act === 'open') { openChat(c.id); return; }
-      if (act === 'verified') {
-        openSheet(`
-          <div class="sheet-title">انتخاب نشان تایید</div>
-          <div class="sheet-item" data-badge="none">${icon('ban')}بدون نشان</div>
-          <div class="sheet-item" data-badge="blue">${vfHTML('blue', 20)} نشان افراد سرشناس</div>
-          <div class="sheet-item" data-badge="yellow">${vfHTML('yellow', 20)} نشان سازمانی</div>
-          <div class="sheet-item" data-badge="green">${vfHTML('green', 20)} نشان تجاری</div>
-          <div class="sheet-item" data-badge="personal">${vfHTML('personal', 20)} نشان شخصی</div>
-        `);
-        $$('#sheet-content [data-badge]').forEach(b2 => b2.addEventListener('click', () => {
-          const bType = b2.dataset.badge;
-          c.badgeType = bType === 'none' ? null : bType;
-          closeSheet(); renderChatList(); save();
-          toast('نشان تغییر کرد', 'success');
-        }));
-        return;
-      }
+      if (act === 'verified') { c.verified = !c.verified; toast(c.verified?'تیک داده شد':'برداشته شد', 'info'); renderChatList(); save(); return; }
       if (act === 'pin') { c.pinned = !c.pinned; toast(c.pinned?'سنجاق شد':'برداشته شد', 'info'); renderChatList(); save(); return; }
       if (act === 'mute') { c.muted = !c.muted; toast(c.muted?'بی‌صدا شد':'اعلان فعال', 'info'); renderChatList(); save(); return; }
       if (act === 'info') { openInfo(c.id); return; }
       if (act === 'read') { c.unread = 0; renderChatList(); save(); toast('خوانده شد', 'success'); return; }
       if (act === 'warn') { openWarnModal(c.id); return; }
       if (act === 'set-warner') {
-        state.globalWarner = { name: c.name, username: c.username || '', avatar: c.avatar, badgeType: c.badgeType };
+        setGlobalWarner({ name: c.name, username: c.username || '', avatar: c.avatar, verified: !!c.verified });
         save();
         toast(`«${c.name}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
         return;
@@ -2523,7 +2397,7 @@ function bindEmojis(scope) {
     autoGrow();
     updateSendBtnState();
     const c = getChat(activeChatId);
-    if (c) { c.draft = inputEl.value; save(); }
+    if (c && !isWarnerChat(c)) { c.draft = inputEl.value; save(); }
   }));
 }
 emojiOverlay.addEventListener('click', e => { if (e.target === emojiOverlay) emojiOverlay.classList.remove('show'); });
@@ -2568,11 +2442,7 @@ const _btnSend = $('#btn-send');
 if (_btnSend) _btnSend.addEventListener('click', e => { e.preventDefault(); if (recActive) stopRec(false); else startRec(); });
 
 function pickPhotoForMessage() {
-  const chat = getChat(activeChatId);
-  if (chat && isWarnerChat(chat)) {
-    toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error');
-    return;
-  }
+  { const _c = getChat(activeChatId); if (_c && isWarnerChat(_c)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; } }
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/*,video/*';
   inp.onchange = () => {
@@ -2596,7 +2466,6 @@ $('#btn-chat-menu').addEventListener('click', () => {
   const warnBtn = (c.type !== 'ai' && c.type !== 'saved') ? `<div class="sheet-item" data-cact="warn" style="color:#f59e0b">${icon('alert')}ارسال اخطار</div>` : '';
   const setWarnerBtn = (c.type !== 'ai' && c.type !== 'saved') ? `<div class="sheet-item" data-cact="set-warner">${icon('user')}تنظیم به عنوان اخطار دهنده</div>` : '';
   const banBtn = (c.type !== 'ai' && c.type !== 'saved') ? `<div class="sheet-item danger" data-cact="ban">${icon('ban')}بن کردن</div>` : '';
-
   openSheet(`
     <div class="sheet-title">${esc(c.name)}</div>
     <div class="sheet-item" data-cact="search">${icon('search')}جستجو در پیام‌ها</div>
@@ -2604,7 +2473,7 @@ $('#btn-chat-menu').addEventListener('click', () => {
     <div class="sheet-item" data-cact="avatar">${icon('image')}تنظیم پروفایل</div>
     <div class="sheet-item" data-cact="wallpaper">${icon('image')}تغییر پس‌زمینه چت</div>
     ${coverItem}${descItem}
-    <div class="sheet-item" data-cact="verified">${icon('verified')}تغییر نشان تایید</div>
+    <div class="sheet-item" data-cact="verified">${icon('verified')}${c.verified?'برداشتن تیک':'دادن تیک'}</div>
     <div class="sheet-item" data-cact="rename">${icon('edit')}تغییر نام</div>
     ${memberItem}
     <div class="sheet-item" data-cact="pin">${icon('pin')}${c.pinned?'برداشتن سنجاق':'سنجاق'}</div>
@@ -2613,14 +2482,13 @@ $('#btn-chat-menu').addEventListener('click', () => {
     <div class="sheet-item" data-cact="clear">${icon('trash')}پاک کردن تاریخچه</div>
     <div class="sheet-item danger" data-cact="delete">${icon('trash')}حذف گفتگو</div>
   `);
-
   $$('#sheet-content [data-cact]').forEach(b => b.addEventListener('click', () => {
     const act = b.dataset.cact;
     closeSheet();
     setTimeout(() => {
       if (act === 'warn') { openWarnModal(c.id); return; }
       if (act === 'set-warner') {
-        state.globalWarner = { name: c.name, username: c.username || '', avatar: c.avatar, badgeType: c.badgeType };
+        setGlobalWarner({ name: c.name, username: c.username || '', avatar: c.avatar, verified: !!c.verified });
         save();
         toast(`«${c.name}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
         return;
@@ -2629,26 +2497,9 @@ $('#btn-chat-menu').addEventListener('click', () => {
       if (act === 'search') { openMsgSearch(); return; }
       if (act === 'info') { openInfo(c.id); return; }
       if (act === 'avatar') { openAvatarPicker('chat', c.id); return; }
-      if (act === 'wallpaper') { openWallpaperPicker(c); return; }
       if (act === 'cover') { pickCoverImage(c); return; }
       if (act === 'desc') { showPrompt('توضیحات', c.description||'', v => { c.description = v.trim(); renderChatList(); save(); toast('ذخیره شد', 'success'); }); return; }
-      if (act === 'verified') {
-        openSheet(`
-          <div class="sheet-title">انتخاب نشان تایید</div>
-          <div class="sheet-item" data-badge="none">${icon('ban')}بدون نشان</div>
-          <div class="sheet-item" data-badge="blue">${vfHTML('blue', 20)} نشان افراد سرشناس</div>
-          <div class="sheet-item" data-badge="yellow">${vfHTML('yellow', 20)} نشان سازمانی</div>
-          <div class="sheet-item" data-badge="green">${vfHTML('green', 20)} نشان تجاری</div>
-          <div class="sheet-item" data-badge="personal">${vfHTML('personal', 20)} نشان شخصی</div>
-        `);
-        $$('#sheet-content [data-badge]').forEach(b2 => b2.addEventListener('click', () => {
-          const bType = b2.dataset.badge;
-          c.badgeType = bType === 'none' ? null : bType;
-          closeSheet(); renderChatHeader(); renderChatList(); save();
-          toast('نشان تغییر کرد', 'success');
-        }));
-        return;
-      }
+      if (act === 'verified') { c.verified = !c.verified; toast(c.verified?'تیک داده شد':'برداشته شد', 'info'); renderChatList(); renderChatHeader(); save(); return; }
       if (act === 'rename') { showPrompt('نام جدید', c.name, v => { if (!v.trim()) return; c.name = v.trim(); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
       if (act === 'members') { showPrompt('تعداد اعضا', String(c.members||0), v => { const n = parseInt(v, 10); if (isNaN(n) || n < 0) { toast('عدد معتبر', 'error'); return; } c.members = Math.min(n, 9999999); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
       if (act === 'pin') { c.pinned = !c.pinned; toast(c.pinned?'سنجاق':'برداشته شد', 'info'); }
@@ -2808,7 +2659,7 @@ function promptChatName(type) {
     else { toast('از قبل موجوده', 'info'); setTimeout(() => openChat(ex.id), 150); }
     return;
   }
-  if (type === 'ai') { createChat({name:'دستیار گپ', type:'ai', avatar:{type:'gradient',value:4}, badgeType:'blue', username:'gap_ai', online:true, joined:true}); return; }
+  if (type === 'ai') { createChat({name:'دستیار گپ', type:'ai', avatar:{type:'gradient',value:4}, verified:true, username:'gap_ai', online:true, joined:true}); return; }
   if (type === 'private') {
     showPrompt('آیدی کاربر (بدون @)', '', val => {
       const username = val.trim().replace(/@/g, '');
@@ -2821,14 +2672,14 @@ function promptChatName(type) {
         }
         let chat = state.chats.find(c => c.username && normUser(c.username) === normUser(username));
         if (!chat) {
-          chat = { id: rid(), name: f.entity.name, type: 'private', username: f.entity.username, avatar: f.entity.avatar, coverPhoto: f.entity.coverPhoto, badgeType: f.entity.badgeType, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
+          chat = { id: rid(), name: f.entity.name, type: 'private', username: f.entity.username, avatar: f.entity.avatar, coverPhoto: f.entity.coverPhoto, verified: f.entity.verified, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
           state.chats.push(chat);
         }
         save(); renderChatList(); openChat(chat.id);
         return;
       }
       const name = username;
-      const data = { name, type:'private', username: username, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, badgeType:null, online:Math.random()>.5 };
+      const data = { name, type:'private', username: username, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, verified:false, online:Math.random()>.5 };
       createChat(data);
     }, {ltr:true});
     return;
@@ -2837,7 +2688,7 @@ function promptChatName(type) {
   showPrompt(titles[type], '', val => {
     const name = val.trim();
     if (!name) { toast('نام نمی‌تونه خالی باشه', 'error'); return; }
-    const data = { name, type, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, badgeType:null, username:'', isPublic:type === 'channel', description:'', coverPhoto:null, admins:[], permissions:{sendMessages:'all',editInfo:'all'}, joined:true };
+    const data = { name, type, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, verified:false, username:'', isPublic:type === 'channel', description:'', coverPhoto:null, admins:[], permissions:{sendMessages:'all',editInfo:'all'}, joined:true };
     if (type === 'private') data.online = true;
     if (type === 'group' || type === 'channel') {
       const def = type === 'group' ? '4' : '100';
@@ -2885,14 +2736,14 @@ function finishCreate(data, type) {
   createChat(data);
   if (type === 'private') {
     const id = state.chats[state.chats.length-1].id;
-    state.contacts.push({id, name:data.name, avatar:data.avatar, badgeType:data.badgeType});
+    state.contacts.push({id, name:data.name, avatar:data.avatar, verified:false});
     save(); renderContacts();
   }
 }
 
 function createChat(data) {
   const chat = Object.assign({
-    id: rid(), unread:0, pinned:false, muted:false, draft:'', messages:[], createdAt:Date.now(),
+    id:rid(), unread:0, pinned:false, muted:false, draft:'', messages:[], createdAt:Date.now(),
     description:'', coverPhoto:null, admins:[], permissions:{sendMessages:'all',editInfo:'all'}, joined:true, warner:'',
     joinedDate: getPersianDate(),
     owner: null
@@ -2901,7 +2752,6 @@ function createChat(data) {
   if ((chat.type === 'group' || chat.type === 'channel') && !chat.owner) {
     chat.owner = { name: state.me.name, username: state.me.username || '' };
   }
-
   state.chats.push(chat);
   if ((chat.type === 'group' || chat.type === 'channel') && chat.isPublic && chat.username) {
     const exists = state.directory.find(d => d.username === chat.username);
@@ -2920,7 +2770,7 @@ $('#contacts-list').addEventListener('click', e => {
   if (!c) return;
   let chat = state.chats.find(x => x.id === c.id);
   if (!chat) {
-    chat = { id:c.id, name:c.name, type:'private', avatar:c.avatar, badgeType:c.badgeType, username:'', online:Math.random()>.5, unread:0, pinned:false, muted:false, draft:'', messages:[], createdAt:Date.now(), joined:true, warner:'' };
+    chat = { id:c.id, name:c.name, type:'private', avatar:c.avatar, verified:c.verified, username:'', online:Math.random()>.5, unread:0, pinned:false, muted:false, draft:'', messages:[], createdAt:Date.now(), joined:true, warner:'' };
     state.chats.push(chat); save();
   }
   openChat(chat.id);
@@ -2971,23 +2821,6 @@ $('#settings-body').addEventListener('click', e => {
       }, {ltr:true, placeholder:'+98 912 345 6789'});
     }
     if (act === 'edit-joined') showPrompt('تاریخ عضویت', state.me.joinedDate || getPersianDate(), v => { state.me.joinedDate = v.trim() || getPersianDate(); renderSettings(); save(); toast('ذخیره شد', 'success'); });
-    if (act === 'set-badge') {
-      openSheet(`
-        <div class="sheet-title">انتخاب نشان تایید</div>
-        <div class="sheet-item" data-badge="none">${icon('ban')}بدون نشان</div>
-        <div class="sheet-item" data-badge="blue">${vfHTML('blue', 20)} نشان افراد سرشناس</div>
-        <div class="sheet-item" data-badge="yellow">${vfHTML('yellow', 20)} نشان سازمانی</div>
-        <div class="sheet-item" data-badge="green">${vfHTML('green', 20)} نشان تجاری</div>
-        <div class="sheet-item" data-badge="personal">${vfHTML('personal', 20)} نشان شخصی</div>
-      `);
-      $$('#sheet-content [data-badge]').forEach(b => b.addEventListener('click', () => {
-        const bType = b.dataset.badge;
-        state.me.badgeType = bType === 'none' ? null : bType;
-        closeSheet(); renderSettings(); renderChatList(); save();
-        toast('نشان تغییر کرد', 'success');
-      }));
-      return;
-    }
     if (act === 'check-update') {
       toast('در حال بررسی و به روز رسانی...', 'info');
       setTimeout(async () => {
@@ -3054,6 +2887,8 @@ $('#settings-body').addEventListener('click', e => {
       toast('پشتیبان‌گیری خودکار فعال', 'success');
     }
   }
+  const meSw = e.target.closest('input[data-me]');
+  if (meSw) { state.me[meSw.dataset.me] = meSw.checked; renderSettings(); renderChatList(); save(); toast(state.me.verified ? 'تیک فعال' : 'تیک غیرفعال', 'info'); }
 });
 
 /* ---------- backup ---------- */
