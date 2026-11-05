@@ -1,4 +1,4 @@
-const CACHE = 'gapprivte-v1.0.0'; // نسخه کش آپدیت شد تا تیک‌های جدید شناسایی شوند
+const CACHE = 'gapapps-v1.0.2'; // نسخه کش با نسخه برنامه یکسان شد
 const ASSETS = [
   './',
   './index.html',
@@ -6,12 +6,7 @@ const ASSETS = [
   './script.js',
   './manifest.json',
   './Logo.png',
-  './Font.ttf',
-  // تیک‌های تایید جدید
-  './blue-tick.png',
-  './yellow-tick.png',
-  './green-tick.png',
-  './personal-tick.png'
+  './Font.ttf' // فونت محلی به لیست کش اضافه شد
 ];
 
 self.addEventListener('install', e => {
