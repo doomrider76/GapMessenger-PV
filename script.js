@@ -83,7 +83,7 @@ const emptyAccount = () => ({
   id: 'acc_' + Date.now() + Math.random().toString(36).slice(2, 6),
   name: 'من', username: '', phone: '',
   avatar: { type: 'gradient', value: 3 },
-  coverPhoto: null, verified: false, joinedDate: getPersianDate(), chats: [], contacts: []
+  coverPhoto: null, badgeType: null, joinedDate: getPersianDate(), chats: [], contacts: []
 });
 
 const emptyState = () => ({
@@ -102,13 +102,16 @@ function normalizeAccount(acc) {
   if (!Array.isArray(acc.chats)) acc.chats = [];
   if (!Array.isArray(acc.contacts)) acc.contacts = [];
   if (acc.coverPhoto === undefined) acc.coverPhoto = null;
+  if (acc.verified && !acc.badgeType) acc.badgeType = 'blue';
+  if (!acc.badgeType) acc.badgeType = null;
   if (!acc.joinedDate) acc.joinedDate = getPersianDate();
   return acc;
 }
 
 function normalizeChat(c, i) {
   if (!c.avatar) c.avatar = {type:'gradient',value:i % AV_GRADS.length};
-  if (typeof c.verified !== 'boolean') c.verified = false;
+  if (c.verified && !c.badgeType) c.badgeType = 'blue';
+  if (!c.badgeType) c.badgeType = null;
   if (!c.joinedDate) c.joinedDate = getPersianDate(c.createdAt || Date.now());
   if (c.wallpaper === undefined) c.wallpaper = null;
   if (c.owner === undefined) c.owner = null;
@@ -185,7 +188,7 @@ function save() {
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', state.theme || 'dark');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = state.theme === 'light' ? '#f2f2f7' : '#131313';
+  if (meta) meta.content = state.theme === 'light' ? '#ffffff' : '#131313';
   try { if (typeof activeChatId !== 'undefined' && activeChatId) applyWallpaper(getChat(activeChatId)); } catch {}
 }
 applyTheme();
@@ -236,8 +239,25 @@ function avatarContent(e) {
   if (av.type === 'image') return '';
   return esc(initials(e.name));
 }
-const vfHTML = (s = 20) => `<img class="vf" src="blue-tick.png" width="${s}" height="${s}" alt="✓" loading="lazy">`;
-const nameWithVf = (n, v, s = 20) => `${esc(n)}${v ? vfHTML(s) : ''}`;
+const BADGES = {
+  blue: { src: 'blue-tick.png', title: 'نشان افراد سرشناس' },
+  yellow: { src: 'yellow-tick.png', title: 'نشان سازمانی' },
+  green: { src: 'green-tick.png', title: 'نشان تجاری' },
+  personal: { src: 'personal-tick.png', title: 'نشان شخصی' }
+};
+const vfHTML = (badgeType, s = 20) => {
+  if (!badgeType || !BADGES[badgeType]) return '';
+  return `<img class="vf" src="${BADGES[badgeType].src}" width="${s}" height="${s}" alt="${BADGES[badgeType].title}" loading="lazy">`;
+};
+const nameWithVf = (n, badgeType, s = 20) => `${esc(n)}${vfHTML(badgeType, s)}`;
+const badgeSheetHTML = () => `
+  <div class="sheet-title">انتخاب نشان تایید</div>
+  <div class="sheet-item" data-badge="none">${icon('ban')}بدون نشان</div>
+  <div class="sheet-item" data-badge="blue">${vfHTML('blue', 20)} نشان افراد سرشناس</div>
+  <div class="sheet-item" data-badge="yellow">${vfHTML('yellow', 20)} نشان سازمانی</div>
+  <div class="sheet-item" data-badge="green">${vfHTML('green', 20)} نشان تجاری</div>
+  <div class="sheet-item" data-badge="personal">${vfHTML('personal', 20)} نشان شخصی</div>
+`;
 
 function renderTopProfile() {
   const el = $('#top-profile-avatar');
@@ -350,7 +370,7 @@ function findByUsername(u) {
   if (inChats) return {entity:inChats, source:'chat'};
   const inAcc = state.accounts.find(a => a.username && normUser(a.username) === low);
   if (inAcc) {
-    return { entity: { name: inAcc.name, username: inAcc.username, avatar: inAcc.avatar, coverPhoto: inAcc.coverPhoto, verified: inAcc.verified, type: 'private', members: 0 }, source: 'local_account' };
+    return { entity: { name: inAcc.name, username: inAcc.username, avatar: inAcc.avatar, coverPhoto: inAcc.coverPhoto, badgeType: inAcc.badgeType, type: 'private', members: 0 }, source: 'local_account' };
   }
   return null;
 }
@@ -384,7 +404,7 @@ function mentionPreview(username) {
   const f = findByUsername(username);
   if (!f) return null;
   const e = f.entity;
-  return {username:e.username, name:e.name, verified:!!e.verified, type:e.type, members:e.members||0, source:f.source, id:e.id};
+  return {username:e.username, name:e.name, badgeType:e.badgeType, type:e.type, members:e.members||0, source:f.source, id:e.id};
 }
 
 /* ---------- AI ---------- */
@@ -416,7 +436,7 @@ function syncMessageToTargetAccount(targetUsername, messageData, senderInfo) {
   if (!targetAcc.chats) targetAcc.chats = [];
   let targetChat = targetAcc.chats.find(c => (c.username && normUser(c.username) === normUser(senderInfo.username)) || c.name === senderInfo.name);
   if (!targetChat) {
-    targetChat = { id: rid(), name: senderInfo.name, username: senderInfo.username, type: 'private', avatar: senderInfo.avatar, coverPhoto: senderInfo.coverPhoto, verified: senderInfo.verified, unread: 1, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
+    targetChat = { id: rid(), name: senderInfo.name, username: senderInfo.username, type: 'private', avatar: senderInfo.avatar, coverPhoto: senderInfo.coverPhoto, badgeType: senderInfo.badgeType, unread: 1, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
     targetAcc.chats.push(targetChat);
   } else {
     targetChat.unread = (targetChat.unread || 0) + 1;
@@ -439,7 +459,7 @@ function findOrCreatePrivateChatWithEntity(account, entity) {
       type: 'private',
       avatar: entity.avatar,
       coverPhoto: entity.coverPhoto || null,
-      verified: !!entity.verified,
+      badgeType: entity.badgeType || null,
       unread: 0,
       pinned: false,
       muted: false,
@@ -466,6 +486,26 @@ function sameIdentity(a, b) {
   if (a.username && b.username) return normUser(a.username) === normUser(b.username);
   if (a.username || b.username) return false;
   return a.name === b.name;
+}
+
+/* ✅ همگام‌سازی نشان تایید بین همه‌ی اکانت‌ها: هر نشانی که برای یک فرد/چت/اکانت ثبت شود، در همه‌ی اکانت‌ها نمایش داده می‌شود */
+function setBadgeEverywhere(entity, badgeType) {
+  if (!entity) return;
+  const bt = badgeType || null;
+  const isGCt = t => t === 'group' || t === 'channel';
+  const kind = e => (e && isGCt(e.type)) ? 'gc' : 'user';
+  const ref = { name: entity.name, username: entity.username || '' };
+  const refKind = kind(entity);
+  const match = e => e && sameIdentity(e, ref) && kind(e) === refKind;
+  entity.badgeType = bt;
+  const all = [state.me, ...(state.accounts || [])];
+  all.forEach(acc => {
+    if (refKind === 'user' && sameIdentity(acc, ref)) acc.badgeType = bt;
+    (acc.chats || []).forEach(c => { if (c.type !== 'saved' && c.type !== 'ai' && match(c)) c.badgeType = bt; });
+    (acc.contacts || []).forEach(c => { if (match(c)) c.badgeType = bt; });
+  });
+  (state._globalDirectory || []).forEach(d => { if (match(d)) d.badgeType = bt; });
+  if (state.globalWarner && refKind === 'user' && sameIdentity(state.globalWarner, ref)) state.globalWarner.badgeType = bt;
 }
 
 function isWarnerChat(chat) {
@@ -496,7 +536,7 @@ function renderChatList() {
       <div class="chat-item" data-directory="${d.id}" data-chat-type="${d.type}">
         ${avatarHTML(d)}
         <div class="ci-body">
-          <div class="ci-top"><span class="ci-name">${nameWithVf(d.name, d.verified, 20)}</span>
+          <div class="ci-top"><span class="ci-name">${nameWithVf(d.name, d.badgeType, 20)}</span>
           <span class="ci-time" style="font-size:11px">${d.type === 'channel' ? 'کانال' : 'گروه'}</span></div>
           <div class="ci-bot"><span class="ci-prev">${esc(d.description || (d.members ? d.members.toLocaleString('fa-IR')+' عضو' : ''))}</span></div>
         </div>
@@ -551,7 +591,7 @@ function renderChatList() {
       return `<div class="chat-item" data-id="${c.id}" data-chat-type="${c.type}">
         ${avatarHTML(c)}
         <div class="ci-body">
-          <div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.verified, 20)}</span>
+          <div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.badgeType, 20)}</span>
           <span class="ci-time">${m?ticks:''}${m?fmtListTime(lastTs(c)):''}</span></div>
           <div class="ci-bot"><span class="ci-prev">${esc(previewText(c))}</span>${pin}${badge}</div>
         </div>
@@ -571,7 +611,7 @@ function renderContacts() {
   box.innerHTML = state.contacts.map(c => `
     <div class="chat-item" data-contact="${c.id}">
       ${avatarHTML(c)}
-      <div class="ci-body"><div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.verified, 20)}</span></div>
+      <div class="ci-body"><div class="ci-top"><span class="ci-name">${nameWithVf(c.name, c.badgeType, 20)}</span></div>
       <div class="ci-bot"><span class="ci-prev">برای شروع گفتگو لمس کن</span></div></div>
     </div>`).join('');
 }
@@ -591,9 +631,9 @@ function renderSettings() {
       </div>
       <button class="pc-edit-btn" id="btn-edit-profile">${icon('edit',14)} ویرایش</button>
       <div class="avatar big" id="my-avatar-btn" style="${avatarBgStyle(me)}">${avatarContent(me)}</div>
-      <div style="text-align:center">
-        <div class="pn">${nameWithVf(me.name, me.verified, 26)}</div>
-        <div class="pp" dir="ltr" style="text-align:center">${me.phone ? esc(me.phone) : 'شماره ثبت نشده'}</div>
+      <div class="pc-info">
+        <div class="pn">${nameWithVf(me.name, me.badgeType, 26)}</div>
+        <div class="pp" dir="ltr">${me.phone ? esc(me.phone) : 'شماره ثبت نشده'}</div>
         ${me.username ? `<div class="info-username" style="margin-top:8px">@${esc(me.username)}</div>` : ''}
       </div>
     </div>
@@ -602,7 +642,7 @@ function renderSettings() {
       <div class="row" data-act="edit-name"><span class="r-icon">${icon('edit',20)}</span><span class="r-text">نام</span><span class="r-val">${esc(me.name)}</span><span class="chev">${icon('chevron',18)}</span></div>
       <div class="row" data-act="edit-username"><span class="r-icon" style="background:linear-gradient(180deg,#a78bfa,#8b5cf6)">${icon('user',20)}</span><span class="r-text">آیدی من</span><span class="r-val">${me.username ? '@'+esc(me.username) : 'تنظیم نشده'}</span><span class="chev">${icon('chevron',18)}</span></div>
       <div class="row" data-act="edit-phone"><span class="r-icon">${icon('phone',20)}</span><span class="r-text">شماره تلفن</span><span class="r-val" dir="ltr">${me.phone ? esc(me.phone) : '—'}</span><span class="chev">${icon('chevron',18)}</span></div>
-      <div class="row"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">تیک آبی</span><label class="switch"><input type="checkbox" data-me="verified" ${me.verified?'checked':''}><span class="sl"></span></label></div>
+      <div class="row" data-act="set-badge"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">نشان تایید</span><span class="r-val">${me.badgeType ? BADGES[me.badgeType].title : 'بدون نشان'}</span><span class="chev">${icon('chevron',18)}</span></div>
       <div class="row" data-act="edit-joined"><span class="r-icon">${icon('chart',20)}</span><span class="r-text">تاریخ عضویت</span><span class="r-val">${esc(me.joinedDate || getPersianDate())}</span><span class="chev">${icon('chevron',18)}</span></div>
     </div>
     <div class="section-title">مدیریت اکانت‌ها</div>
@@ -649,7 +689,7 @@ function renderAccountsList() {
       <div class="account-info-wrap">
         ${avatarHTML(state.me, 40).replace('class="avatar', 'class="account-avatar-sm avatar')}
         <div>
-          <div class="account-name-sm">${esc(state.me.name)} ${state.me.verified ? vfHTML(16) : ''}</div>
+          <div class="account-name-sm">${esc(state.me.name)} ${vfHTML(state.me.badgeType, 16)}</div>
           <div class="account-handle-sm">${state.me.username ? '@'+state.me.username : 'بدون آیدی'}</div>
         </div>
       </div>
@@ -662,7 +702,7 @@ function renderAccountsList() {
         <div class="account-info-wrap">
           ${avatarHTML(acc, 40).replace('class="avatar', 'class="account-avatar-sm avatar')}
           <div>
-            <div class="account-name-sm">${esc(acc.name)} ${acc.verified ? vfHTML(16) : ''}</div>
+            <div class="account-name-sm">${esc(acc.name)} ${vfHTML(acc.badgeType, 16)}</div>
             <div class="account-handle-sm">${acc.username ? '@'+acc.username : 'بدون آیدی'}</div>
           </div>
         </div>
@@ -806,7 +846,7 @@ $('#btn-submit-warn').addEventListener('click', () => {
     name: warner.name,
     username: warner.username || '',
     avatar: warner.avatar,
-    verified: !!warner.verified,
+    badgeType: warner.badgeType || null,
     coverPhoto: warner.coverPhoto || null
   });
   chatInRecipient.messages.push({
@@ -921,6 +961,34 @@ function simulatePollVotes(chat, pollMsg) {
   }, 2000);
 }
 
+/* ---------- Pinned messages ---------- */
+const pinCursor = {};
+function getPinned(chat) { return chat ? chat.messages.filter(m => m.pinned && !m.deleted) : []; }
+function updatePinCircle() {
+  const btn = $('#pin-circle'), box = $('#messages');
+  if (!btn) return;
+  const n = getPinned(getChat(activeChatId)).length;
+  btn.classList.toggle('show', n > 0);
+  if (box) box.classList.toggle('has-pins', n > 0);
+  const cnt = $('#pin-count');
+  if (cnt) { cnt.textContent = n > 1 ? n.toLocaleString('fa-IR') : ''; cnt.style.display = n > 1 ? 'flex' : 'none'; }
+}
+function jumpToNextPinned() {
+  const chat = getChat(activeChatId);
+  const list = getPinned(chat);
+  if (!list.length) { updatePinCircle(); return; }
+  let i = pinCursor[chat.id];
+  i = (i === undefined || i >= list.length || i < 0) ? list.length - 1 : (i - 1 < 0 ? list.length - 1 : i - 1);
+  pinCursor[chat.id] = i;
+  const m = list[i];
+  const el = $(`#messages .msg[data-id="${m.id}"]`);
+  if (!el) { toast('پیام سنجاق‌شده در دسترس نیست', 'info'); return; }
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.add('selected'); setTimeout(() => el.classList.remove('selected'), 900);
+  if (navigator.vibrate) navigator.vibrate(10);
+}
+$('#pin-circle').addEventListener('click', jumpToNextPinned);
+
 function msgHTML(chat, m, prevMsg, nextMsg) {
   const isNew = !renderedIds.has(m.id);
   renderedIds.add(m.id);
@@ -986,7 +1054,7 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
     const mention = firstMention(m.text);
     if (mention) {
       const mp = mentionPreview(mention);
-      if (mp) inner += `<a class="mention-preview" data-mention-preview="${esc(mp.username)}"><div class="mp-header"><div class="mp-avatar" style="${avatarBgStyle({name:mp.name})}">${esc(initials(mp.name))}</div><span class="mp-name">${esc(mp.name)}${mp.verified?vfHTML(15):''}</span></div><span class="mp-sub">@${esc(mp.username)} · ${mp.type==='channel'?'کانال':mp.type==='group'?'گروه':'کاربر'}</span></a>`;
+      if (mp) inner += `<a class="mention-preview" data-mention-preview="${esc(mp.username)}"><div class="mp-header"><div class="mp-avatar" style="${avatarBgStyle({name:mp.name})}">${esc(initials(mp.name))}</div><span class="mp-name">${esc(mp.name)}${mp.badgeType?vfHTML(mp.badgeType,15):''}</span></div><span class="mp-sub">@${esc(mp.username)} · ${mp.type==='channel'?'کانال':mp.type==='group'?'گروه':'کاربر'}</span></a>`;
     }
   }
   inner += renderReactions(m);
@@ -999,7 +1067,8 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
   }
   const metaText = `${fmtTime(m.ts)}${m.editedForAll?' · ویرایش‌شده':(m.edited?' ✎':'')}`;
   const seen = (chat.type === 'channel' && m.out && (m.seenCount || m.seenTarget)) ? `<span class="msg-seen">${icon('eye',13)} ${fmtNum(m.seenCount||0)}</span>` : '';
-  const msgInner = `${inner}<div class="meta"><span>${metaText}</span>${seen}${ticks}</div>`;
+  const pinMark = (m.pinned && !m.deleted) ? `<span class="meta-pin">${icon('pin',11)}</span>` : '';
+  const msgInner = `${inner}<div class="meta">${pinMark}<span>${metaText}</span>${seen}${ticks}</div>`;
 
   if (chat.type === 'group' && !m.out && m.type !== 'warning') {
     const sender = m.sender || 'عضو';
@@ -1024,6 +1093,7 @@ function renderMessages(scroll = true) {
   const chat = getChat(activeChatId);
   const box = $('#messages');
   if (!box) return;
+  updatePinCircle();
   if (!chat) { box.innerHTML = ''; return; }
   box.setAttribute('data-chat-type', chat.type || 'private');
 
@@ -1090,7 +1160,7 @@ function renderChatHeader() {
     }
   }
   const nameEl = $('#chat-name');
-  if (nameEl) nameEl.innerHTML = nameWithVf(c.name, c.verified, 20);
+  if (nameEl) nameEl.innerHTML = nameWithVf(c.name, c.badgeType, 20);
   const status = $('#chat-status');
   if (status) { status.textContent = chatStatus(c); status.style.color = c.typing ? 'var(--green)' : ''; }
 }
@@ -1220,7 +1290,7 @@ function renderInfo() {
 
   let badges = '';
   if (isGC) badges += `<div class="info-badge ${isPublic?'public':'private'}" data-info-act="toggle-public">${isPublic?icon('globe',14)+' عمومی':icon('lock',14)+' خصوصی'}</div>`;
-  if (c.verified) badges += `<div class="info-badge verified">${icon('verified',14)} تأیید شده</div>`;
+  if (c.badgeType) badges += `<div class="info-badge verified">${vfHTML(c.badgeType, 14)} ${BADGES[c.badgeType].title}</div>`;
 
   let joinedDate = `<div class="info-stat">${icon('chart',16)} عضو شده در ${esc(c.joinedDate || getPersianDate())}</div>`;
   let stats = '';
@@ -1248,7 +1318,7 @@ function renderInfo() {
       <div class="row" data-info-act="edit-name"><span class="r-icon">${icon('edit',20)}</span><span class="r-text">نام</span><span class="r-val">${esc(c.name)}</span><span class="chev">${icon('chevron',18)}</span></div>
       <div class="row" data-info-act="edit-username"><span class="r-icon">${icon('user',20)}</span><span class="r-text">آیدی</span><span class="r-val">${username?'@'+esc(username):'—'}</span><span class="chev">${icon('chevron',18)}</span></div>
       ${isGC ? `<div class="row" data-info-act="toggle-public"><span class="r-icon">${icon(isPublic?'globe':'lock',20)}</span><span class="r-text">نوع</span><span class="r-val">${isPublic?'عمومی':'خصوصی'}</span><span class="chev">${icon('chevron',18)}</span></div><div class="row" data-info-act="edit-members"><span class="r-icon">${icon('users',20)}</span><span class="r-text">تعداد اعضا</span><span class="r-val">${(c.members||0).toLocaleString('fa-IR')}</span><span class="chev">${icon('chevron',18)}</span></div>` : ''}
-      <div class="row"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">تیک آبی</span><label class="switch"><input type="checkbox" id="info-verified-sw" ${c.verified?'checked':''}><span class="sl"></span></label></div>
+      <div class="row" data-info-act="set-badge"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">نشان تایید</span><span class="r-val">${c.badgeType ? BADGES[c.badgeType].title : 'بدون نشان'}</span><span class="chev">${icon('chevron',18)}</span></div>
     </div>` : '';
 
   const permsGrp = isGC ? `
@@ -1261,7 +1331,7 @@ function renderInfo() {
   const joinLeave = isGC ? `<div class="profile-actions">${isJoined?`<button class="btn-leave" data-info-act="leave-chat">${icon('logout',18)} ترک</button>`:`<button class="btn-join" data-info-act="join-chat">${icon('login',18)} عضویت</button>`}</div>` : '';
 
   $('#info-body').innerHTML = `
-    <div class="info-hero has-cover">${cover}<div class="avatar big info-avatar-overlay" id="info-avatar-btn" style="${avatarBgStyle(c)}">${avatarContent(c)}</div><div class="info-name">${esc(c.name)}${c.verified?vfHTML(26):''}</div>${uBlock}${badges?`<div class="info-badges">${badges}</div>`:''}${stats}${joinedDate}</div>
+    <div class="info-hero has-cover">${cover}<div class="avatar big info-avatar-overlay" id="info-avatar-btn" style="${avatarBgStyle(c)}">${avatarContent(c)}</div><div class="info-name">${esc(c.name)}${vfHTML(c.badgeType,26)}</div>${uBlock}${badges?`<div class="info-badges">${badges}</div>`:''}${stats}${joinedDate}</div>
     ${desc}${settingsGrp}${permsGrp}${membersList}${joinLeave}
     <div class="section-title">عملیات</div>
     <div class="group">
@@ -1272,8 +1342,6 @@ function renderInfo() {
     <div class="empty" style="padding:20px 40px 40px;font-size:12px;opacity:.55">شناسه: ${esc(c.id)}<br>ساخته شده در ${new Date(c.createdAt||Date.now()).toLocaleDateString('fa-IR')}</div>
   `;
 
-  const vSw = $('#info-verified-sw');
-  if (vSw) vSw.addEventListener('change', () => { c.verified = vSw.checked; renderInfo(); renderChatList(); renderChatHeader(); save(); toast(c.verified?'تیک آبی فعال شد':'تیک آبی غیرفعال شد'); });
   $$('#info-body [data-info-act]').forEach(el => el.addEventListener('click', e => {
     if (e.target.tagName === 'INPUT' || e.target.closest('label.switch')) return;
     handleInfoAction(el.dataset.infoAct, c);
@@ -1393,6 +1461,16 @@ function handleInfoAction(act, c) {
       c.username = u; renderInfo(); save(); toast('ذخیره شد: @'+u);
     }, {ltr:true}); return;
   }
+  if (act === 'set-badge') {
+    openSheet(badgeSheetHTML());
+    $$('#sheet-content [data-badge]').forEach(b => b.addEventListener('click', () => {
+      const bType = b.dataset.badge;
+      setBadgeEverywhere(c, bType === 'none' ? null : bType);
+      closeSheet(); renderInfo(); renderChatList(); renderChatHeader(); save();
+      toast('نشان تغییر کرد', 'success');
+    }));
+    return;
+  }
   if (act === 'toggle-public') { c.isPublic = !c.isPublic; renderInfo(); save(); toast(c.isPublic?'عمومی':'خصوصی'); return; }
   if (act === 'edit-members') {
     showPrompt('تعداد اعضا', String(c.members||0), v => {
@@ -1449,7 +1527,7 @@ function openProfilePreview(username) {
 
   let badges = '';
   if (isGC) badges += `<div class="info-badge ${e.isPublic?'public':'private'}">${e.isPublic?icon('globe',14)+' عمومی':icon('lock',14)+' خصوصی'}</div>`;
-  if (e.verified) badges += `<div class="info-badge verified">${icon('verified',14)} تأیید شده</div>`;
+  if (e.badgeType) badges += `<div class="info-badge verified">${vfHTML(e.badgeType, 14)} ${BADGES[e.badgeType].title}</div>`;
 
   let joinedDate = `<div class="info-stat">${icon('chart',16)} عضو شده در ${esc(e.joinedDate || getPersianDate())}</div>`;
   let stats = '';
@@ -1479,7 +1557,7 @@ function openProfilePreview(username) {
     <div class="info-hero has-cover">
       ${cover}
       <div class="avatar big info-avatar-overlay" style="${avatarBgStyle(e)}">${avatarContent(e)}</div>
-      <div class="info-name">${esc(e.name)}${e.verified?vfHTML(26):''}</div>
+      <div class="info-name">${esc(e.name)}${vfHTML(e.badgeType,26)}</div>
       ${uBlock}
       ${badges?`<div class="info-badges">${badges}</div>`:''}
       ${stats}
@@ -1526,7 +1604,7 @@ function openProfilePreview(username) {
   if (mb) mb.onclick = () => {
     let chat = state.chats.find(c => c.username && normUser(c.username) === normUser(e.username));
     if (!chat) {
-      chat = { id: rid(), name: e.name, username: e.username, type: 'private', avatar: e.avatar, coverPhoto: e.coverPhoto, verified: e.verified, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
+      chat = { id: rid(), name: e.name, username: e.username, type: 'private', avatar: e.avatar, coverPhoto: e.coverPhoto, badgeType: e.badgeType, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
       state.chats.push(chat);
     }
     save(); closeProfilePreview(); renderChatList(); openChat(chat.id);
@@ -1537,7 +1615,7 @@ function openProfilePreview(username) {
       state.globalWarner = null;
       toast('از لیست اخطار دهنده‌ها حذف شد', 'info');
     } else {
-      state.globalWarner = { name: e.name, username: e.username || '', avatar: e.avatar };
+      state.globalWarner = { name: e.name, username: e.username || '', avatar: e.avatar, badgeType: e.badgeType };
       toast(`«${e.name}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
     }
     save();
@@ -2049,6 +2127,7 @@ function showMsgMenu(el) {
   el.classList.add('selected');
   setTimeout(() => el.classList.remove('selected'), 400);
   let items = `<div class="sheet-item" data-mact="reply">${icon('reply')}پاسخ</div>`;
+  if (!m.deleted) items += `<div class="sheet-item" data-mact="pin">${icon('pin')}${m.pinned?'برداشتن سنجاق':'سنجاق کردن پیام'}</div>`;
   if (m.type !== 'warning') {
     items += `<div class="sheet-item" data-mact="react">${icon('smile')}واکنش</div>`;
   }
@@ -2088,7 +2167,7 @@ function copyClip(text) {
 function saveToSaved(chat, m) {
   let saved = state.chats.find(c => c.type === 'saved');
   if (!saved) {
-    saved = { id:'saved_msgs', name:'پیام‌های ذخیره‌شده', type:'saved', avatar:{type:'gradient',value:6}, verified:false, username:'', isPublic:false, unread:0, pinned:false, muted:false, draft:'', joined:true, createdAt:Date.now(), messages:[] };
+    saved = { id:'saved_msgs', name:'پیام‌های ذخیره‌شده', type:'saved', avatar:{type:'gradient',value:6}, badgeType:null, username:'', isPublic:false, unread:0, pinned:false, muted:false, draft:'', joined:true, createdAt:Date.now(), messages:[] };
     state.chats.push(saved);
   }
   saved.messages.push({
@@ -2101,6 +2180,14 @@ function saveToSaved(chat, m) {
 
 function handleMsgAction(act, chat, m) {
   if (act === 'reply') { showReplyBar(m); return; }
+  if (act === 'pin') {
+    m.pinned = !m.pinned;
+    if (m.pinned) m.pinTs = Date.now(); else delete m.pinTs;
+    delete pinCursor[chat.id];
+    renderMessages(false); save();
+    toast(m.pinned ? 'پیام سنجاق شد' : 'سنجاق برداشته شد', 'info');
+    return;
+  }
   if (act === 'copy') { copyClip(m.text||'').then(()=>toast('کپی شد', 'success'), ()=>toast('کپی نشد', 'error')); return; }
   if (act === 'edit') {
     showPrompt('ویرایش پیام', m.text, val => {
@@ -2125,7 +2212,7 @@ function handleMsgAction(act, chat, m) {
   if (act === 'set-warner') {
     const targetName = m.sender || chat.name;
     const targetUsername = m.sender ? '' : (chat.username || '');
-    setGlobalWarner({ name: targetName, username: targetUsername, avatar: m.senderAvatar || chat.avatar, verified: m.sender ? false : !!chat.verified });
+    setGlobalWarner({ name: targetName, username: targetUsername, avatar: m.senderAvatar || chat.avatar, badgeType: m.sender ? null : chat.badgeType });
     save();
     toast(`«${targetName}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
     return;
@@ -2133,7 +2220,7 @@ function handleMsgAction(act, chat, m) {
   if (act === 'ban') { banUser(chat.id); return; }
   if (act === 'delete-all') {
     showConfirm('حذف برای همه', 'این پیام برای همه حذف شود؟', () => {
-      m.deleted = true; m.text = ''; m.dataUrl = null; m.linkPreview = null;
+      m.deleted = true; m.pinned = false; m.text = ''; m.dataUrl = null; m.linkPreview = null;
       m.reactions = {}; m._fakeReactionCounts = {};
       renderMessages(false); renderChatList(); save(); toast('حذف شد', 'success');
     }); return;
@@ -2225,7 +2312,7 @@ function showChatMenu(id) {
   const c = getChat(id);
   if (!c) return;
   let items = `<div class="sheet-item" data-clact="open">${icon('chat-outline')}باز کردن</div>`;
-  if (c.type !== 'ai' && c.type !== 'saved') items += `<div class="sheet-item" data-clact="verified">${icon('verified')}${c.verified?'برداشتن تیک':'دادن تیک'}</div>`;
+  if (c.type !== 'ai' && c.type !== 'saved') items += `<div class="sheet-item" data-clact="verified">${icon('verified')}تغییر نشان تایید</div>`;
   items += `<div class="sheet-item" data-clact="pin">${icon('pin')}${c.pinned?'برداشتن سنجاق':'سنجاق'}</div>`;
   items += `<div class="sheet-item" data-clact="mute">${icon(c.muted?'bell':'bell-off')}${c.muted?'فعال کردن اعلان':'بی‌صدا'}</div>`;
   items += `<div class="sheet-item" data-clact="info">${icon('user')}اطلاعات</div>`;
@@ -2242,14 +2329,23 @@ function showChatMenu(id) {
     closeSheet();
     setTimeout(() => {
       if (act === 'open') { openChat(c.id); return; }
-      if (act === 'verified') { c.verified = !c.verified; toast(c.verified?'تیک داده شد':'برداشته شد', 'info'); renderChatList(); save(); return; }
+      if (act === 'verified') {
+        openSheet(badgeSheetHTML());
+        $$('#sheet-content [data-badge]').forEach(b2 => b2.addEventListener('click', () => {
+          const bType = b2.dataset.badge;
+          setBadgeEverywhere(c, bType === 'none' ? null : bType);
+          closeSheet(); renderChatList(); save();
+          toast('نشان تغییر کرد', 'success');
+        }));
+        return;
+      }
       if (act === 'pin') { c.pinned = !c.pinned; toast(c.pinned?'سنجاق شد':'برداشته شد', 'info'); renderChatList(); save(); return; }
       if (act === 'mute') { c.muted = !c.muted; toast(c.muted?'بی‌صدا شد':'اعلان فعال', 'info'); renderChatList(); save(); return; }
       if (act === 'info') { openInfo(c.id); return; }
       if (act === 'read') { c.unread = 0; renderChatList(); save(); toast('خوانده شد', 'success'); return; }
       if (act === 'warn') { openWarnModal(c.id); return; }
       if (act === 'set-warner') {
-        setGlobalWarner({ name: c.name, username: c.username || '', avatar: c.avatar, verified: !!c.verified });
+        setGlobalWarner({ name: c.name, username: c.username || '', avatar: c.avatar, badgeType: c.badgeType });
         save();
         toast(`«${c.name}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
         return;
@@ -2473,7 +2569,7 @@ $('#btn-chat-menu').addEventListener('click', () => {
     <div class="sheet-item" data-cact="avatar">${icon('image')}تنظیم پروفایل</div>
     <div class="sheet-item" data-cact="wallpaper">${icon('image')}تغییر پس‌زمینه چت</div>
     ${coverItem}${descItem}
-    <div class="sheet-item" data-cact="verified">${icon('verified')}${c.verified?'برداشتن تیک':'دادن تیک'}</div>
+    <div class="sheet-item" data-cact="verified">${icon('verified')}تغییر نشان تایید</div>
     <div class="sheet-item" data-cact="rename">${icon('edit')}تغییر نام</div>
     ${memberItem}
     <div class="sheet-item" data-cact="pin">${icon('pin')}${c.pinned?'برداشتن سنجاق':'سنجاق'}</div>
@@ -2488,7 +2584,7 @@ $('#btn-chat-menu').addEventListener('click', () => {
     setTimeout(() => {
       if (act === 'warn') { openWarnModal(c.id); return; }
       if (act === 'set-warner') {
-        setGlobalWarner({ name: c.name, username: c.username || '', avatar: c.avatar, verified: !!c.verified });
+        setGlobalWarner({ name: c.name, username: c.username || '', avatar: c.avatar, badgeType: c.badgeType });
         save();
         toast(`«${c.name}» به عنوان اخطار دهنده تنظیم شد ✓`, 'success');
         return;
@@ -2499,7 +2595,16 @@ $('#btn-chat-menu').addEventListener('click', () => {
       if (act === 'avatar') { openAvatarPicker('chat', c.id); return; }
       if (act === 'cover') { pickCoverImage(c); return; }
       if (act === 'desc') { showPrompt('توضیحات', c.description||'', v => { c.description = v.trim(); renderChatList(); save(); toast('ذخیره شد', 'success'); }); return; }
-      if (act === 'verified') { c.verified = !c.verified; toast(c.verified?'تیک داده شد':'برداشته شد', 'info'); renderChatList(); renderChatHeader(); save(); return; }
+      if (act === 'verified') {
+        openSheet(badgeSheetHTML());
+        $$('#sheet-content [data-badge]').forEach(b2 => b2.addEventListener('click', () => {
+          const bType = b2.dataset.badge;
+          setBadgeEverywhere(c, bType === 'none' ? null : bType);
+          closeSheet(); renderChatHeader(); renderChatList(); save();
+          toast('نشان تغییر کرد', 'success');
+        }));
+        return;
+      }
       if (act === 'rename') { showPrompt('نام جدید', c.name, v => { if (!v.trim()) return; c.name = v.trim(); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
       if (act === 'members') { showPrompt('تعداد اعضا', String(c.members||0), v => { const n = parseInt(v, 10); if (isNaN(n) || n < 0) { toast('عدد معتبر', 'error'); return; } c.members = Math.min(n, 9999999); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
       if (act === 'pin') { c.pinned = !c.pinned; toast(c.pinned?'سنجاق':'برداشته شد', 'info'); }
@@ -2659,7 +2764,7 @@ function promptChatName(type) {
     else { toast('از قبل موجوده', 'info'); setTimeout(() => openChat(ex.id), 150); }
     return;
   }
-  if (type === 'ai') { createChat({name:'دستیار گپ', type:'ai', avatar:{type:'gradient',value:4}, verified:true, username:'gap_ai', online:true, joined:true}); return; }
+  if (type === 'ai') { createChat({name:'دستیار گپ', type:'ai', avatar:{type:'gradient',value:4}, badgeType:'blue', username:'gap_ai', online:true, joined:true}); return; }
   if (type === 'private') {
     showPrompt('آیدی کاربر (بدون @)', '', val => {
       const username = val.trim().replace(/@/g, '');
@@ -2672,14 +2777,14 @@ function promptChatName(type) {
         }
         let chat = state.chats.find(c => c.username && normUser(c.username) === normUser(username));
         if (!chat) {
-          chat = { id: rid(), name: f.entity.name, type: 'private', username: f.entity.username, avatar: f.entity.avatar, coverPhoto: f.entity.coverPhoto, verified: f.entity.verified, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
+          chat = { id: rid(), name: f.entity.name, type: 'private', username: f.entity.username, avatar: f.entity.avatar, coverPhoto: f.entity.coverPhoto, badgeType: f.entity.badgeType, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
           state.chats.push(chat);
         }
         save(); renderChatList(); openChat(chat.id);
         return;
       }
       const name = username;
-      const data = { name, type:'private', username: username, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, verified:false, online:Math.random()>.5 };
+      const data = { name, type:'private', username: username, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, badgeType:null, online:Math.random()>.5 };
       createChat(data);
     }, {ltr:true});
     return;
@@ -2688,7 +2793,7 @@ function promptChatName(type) {
   showPrompt(titles[type], '', val => {
     const name = val.trim();
     if (!name) { toast('نام نمی‌تونه خالی باشه', 'error'); return; }
-    const data = { name, type, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, verified:false, username:'', isPublic:type === 'channel', description:'', coverPhoto:null, admins:[], permissions:{sendMessages:'all',editInfo:'all'}, joined:true };
+    const data = { name, type, avatar:{type:'gradient',value:Math.floor(Math.random()*AV_GRADS.length)}, badgeType:null, username:'', isPublic:type === 'channel', description:'', coverPhoto:null, admins:[], permissions:{sendMessages:'all',editInfo:'all'}, joined:true };
     if (type === 'private') data.online = true;
     if (type === 'group' || type === 'channel') {
       const def = type === 'group' ? '4' : '100';
@@ -2736,7 +2841,7 @@ function finishCreate(data, type) {
   createChat(data);
   if (type === 'private') {
     const id = state.chats[state.chats.length-1].id;
-    state.contacts.push({id, name:data.name, avatar:data.avatar, verified:false});
+    state.contacts.push({id, name:data.name, avatar:data.avatar, badgeType:data.badgeType});
     save(); renderContacts();
   }
 }
@@ -2770,7 +2875,7 @@ $('#contacts-list').addEventListener('click', e => {
   if (!c) return;
   let chat = state.chats.find(x => x.id === c.id);
   if (!chat) {
-    chat = { id:c.id, name:c.name, type:'private', avatar:c.avatar, verified:c.verified, username:'', online:Math.random()>.5, unread:0, pinned:false, muted:false, draft:'', messages:[], createdAt:Date.now(), joined:true, warner:'' };
+    chat = { id:c.id, name:c.name, type:'private', avatar:c.avatar, badgeType:c.badgeType, username:'', online:Math.random()>.5, unread:0, pinned:false, muted:false, draft:'', messages:[], createdAt:Date.now(), joined:true, warner:'' };
     state.chats.push(chat); save();
   }
   openChat(chat.id);
@@ -2821,6 +2926,16 @@ $('#settings-body').addEventListener('click', e => {
       }, {ltr:true, placeholder:'+98 912 345 6789'});
     }
     if (act === 'edit-joined') showPrompt('تاریخ عضویت', state.me.joinedDate || getPersianDate(), v => { state.me.joinedDate = v.trim() || getPersianDate(); renderSettings(); save(); toast('ذخیره شد', 'success'); });
+    if (act === 'set-badge') {
+      openSheet(badgeSheetHTML());
+      $$('#sheet-content [data-badge]').forEach(b => b.addEventListener('click', () => {
+        const bType = b.dataset.badge;
+        setBadgeEverywhere(state.me, bType === 'none' ? null : bType);
+        closeSheet(); renderSettings(); renderChatList(); save();
+        toast('نشان تغییر کرد', 'success');
+      }));
+      return;
+    }
     if (act === 'check-update') {
       toast('در حال بررسی و به روز رسانی...', 'info');
       setTimeout(async () => {
@@ -2887,8 +3002,6 @@ $('#settings-body').addEventListener('click', e => {
       toast('پشتیبان‌گیری خودکار فعال', 'success');
     }
   }
-  const meSw = e.target.closest('input[data-me]');
-  if (meSw) { state.me[meSw.dataset.me] = meSw.checked; renderSettings(); renderChatList(); save(); toast(state.me.verified ? 'تیک فعال' : 'تیک غیرفعال', 'info'); }
 });
 
 /* ---------- backup ---------- */
