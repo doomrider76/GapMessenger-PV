@@ -36,10 +36,12 @@
   --r-pill: 999px;
   --hdr-h: 66px;
   --composer-h: 108px;
+  --pin-top: 57px;
 }
 
 html[data-theme="light"]{
-  --bg: #f2f2f7;
+  color-scheme: light;
+  --bg: #ffffff;
   --surface: rgba(0,0,0,.03);
   --surface-2: rgba(0,0,0,.05);
   --surface-3: rgba(0,0,0,.08);
@@ -147,8 +149,6 @@ button svg{fill:currentColor;display:block;flex-shrink:0}
 }
 .brand-text{font-size:19px;font-weight:800;letter-spacing:.5px;color:#fff;pointer-events:none;}
 
-html[data-theme="light"] .circle-btn{background:rgba(24,24,24,0.2);}
-html[data-theme="light"] .brand-pill{background:rgba(24,24,24,0.2);}
 
 .fab-new-chat{position:fixed;left:18px;bottom:24px;width:54px;height:54px;border-radius:50%;background:#6c6c6e;color:#fff;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.15);z-index:6;transition:transform .15s;touch-action:manipulation;}
 .fab-new-chat:active{transform:scale(.9)}
@@ -177,7 +177,6 @@ html[data-theme="light"] .brand-pill{background:rgba(24,24,24,0.2);}
 .chat-hdr-name{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:3px;line-height:1.2;}
 .chat-hdr-name .vf{width:19px;height:19px;flex-shrink:0;}
 .chat-hdr-status{font-size:11px;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;line-height:1.2;}
-html[data-theme="light"] .chat-hdr-center{background:rgba(24,24,24,0.2);}
 
 /* TAB BODY */
 .tab-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;padding:0 8px 20px;padding-top:calc(var(--hdr-h) + 12px);overscroll-behavior:contain;}
@@ -213,8 +212,6 @@ html[data-theme="light"] .chat-hdr-center{background:rgba(24,24,24,0.2);}
 }
 .tnav-item:active{transform:scale(.95)}
 .tnav-item.active{color:#fff;background:#6c6c6e;}
-html[data-theme="light"] .tnav-item{background:rgba(24,24,24,0.2);color:rgba(255,255,255,0.8);}
-html[data-theme="light"] .tnav-item.active{color:#fff;background:#6c6c6e;}
 
 /* CHAT ITEM */
 .chat-item{display:flex;gap:13px;padding:12px 8px;align-items:center;cursor:pointer;transition:background .15s;background:transparent;position:relative;border-bottom:1px solid var(--line);touch-action:manipulation;}
@@ -257,9 +254,9 @@ html[data-theme="light"] .tnav-item.active{color:#fff;background:#6c6c6e;}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 
 .msg.in{background:rgba(28,28,30,.82);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,.06);border-top-color:rgba(255,255,255,.1);border-bottom-right-radius:6px;color:#f0f0f5;}
-.msg.out{align-self:flex-end;background:rgba(44,44,46,.82);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,.08);border-top-color:rgba(255,255,255,.12);border-bottom-left-radius:6px;color:#fff;}
+.msg.out{align-self:flex-end;background:rgba(255,255,255,.10);backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);border:none;border-bottom-left-radius:6px;color:#fff;}
 html[data-theme="light"] .msg.in{background:rgba(233,233,235,.82);border-color:rgba(0,0,0,.06);color:#000;}
-html[data-theme="light"] .msg.out{background:rgba(209,209,214,.82);border-color:rgba(0,0,0,.08);color:#000;}
+html[data-theme="light"] .msg.out{background:rgba(0,0,0,.06);border:none;color:#000;}
 html[data-theme="light"] .msg.in .meta,html[data-theme="light"] .msg.out .meta{color:rgba(0,0,0,.5)}
 
 .msg.selected{filter:brightness(1.25);transform:scale(.98)}
@@ -285,7 +282,7 @@ html[data-theme="light"] .msg.in .meta,html[data-theme="light"] .msg.out .meta{c
 
 #messages[data-chat-type="channel"] .msg.in,#messages[data-chat-type="channel"] .msg.out{max-width:82%;padding:9px 13px 7px;border-radius:18px;color:#f0f0f5;}
 #messages[data-chat-type="channel"] .msg.in{align-self:flex-start;border-bottom-right-radius:6px;background:rgba(28,28,30,.82);border:1px solid rgba(255,255,255,.07);border-top-color:rgba(255,255,255,.11);}
-#messages[data-chat-type="channel"] .msg.out{align-self:flex-end;border-bottom-left-radius:6px;background:rgba(44,44,46,.82);border:1px solid rgba(255,255,255,.1);border-top-color:rgba(255,255,255,.14);}
+#messages[data-chat-type="channel"] .msg.out{align-self:flex-end;border-bottom-left-radius:6px;background:rgba(255,255,255,.10);backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);border:none;}
 
 .msg .ch-head{margin-bottom:4px;padding-bottom:0;border-bottom:none;}
 .msg .ch-head .ch-name{font-size:14.5px;font-weight:700;display:inline-block;line-height:1.3;}
@@ -635,9 +632,12 @@ html[data-theme="light"] .profile-card {
 }
 .profile-card .avatar:active { transform: scale(.94); }
 
-.profile-card .pn { font-size:22px; font-weight:800; letter-spacing:-.4px; display:flex; align-items:center; gap:7px; }
+/* ✅ نام، تیک، شماره و آیدی دقیقاً وسط کادر پروفایل */
+.profile-card .pc-info { width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+.profile-card .pn { font-size:22px; font-weight:800; letter-spacing:-.4px; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:7px; width:100%; max-width:100%; text-align:center; }
 .profile-card .pn .vf { width:24px; height:24px; }
-.profile-card .pp { font-size:13.5px; color:var(--text-3); margin-top:2px; }
+.profile-card .pp { font-size:13.5px; color:var(--text-3); margin-top:2px; width:100%; text-align:center; }
+.profile-card .pc-info .info-username { align-self:center; margin-left:auto; margin-right:auto; }
 
 /* دکمه ویرایش (شیشه ای و بلورمانند) */
 .pc-edit-btn {
@@ -743,7 +743,8 @@ html[data-theme="light"] .profile-card {
 #chat-status.editable{color:var(--text)}
 #chat-status.editable:active{opacity:.7}
 
-.vf{display:inline-block;vertical-align:middle;object-fit:contain;flex-shrink:0;margin-right:0;margin-left:0;transform:translateY(-1px);}
+:root{--vf-shift:0px;} /* اگر تیک نسبت به اسم کمی بالا/پایین بود فقط همین عدد را عوض کن (مثبت = پایین‌تر، منفی = بالاتر) */
+.vf{display:inline-block;vertical-align:middle;object-fit:contain;flex-shrink:0;align-self:center;margin:0;position:static;transform:translateY(var(--vf-shift));}
 
 /* INFO SCREEN */
 #screen-info .hdr,#screen-profile .hdr{position:absolute;top:0;left:0;right:0;background:transparent;border-bottom:none;z-index:20;pointer-events:none;}
@@ -845,7 +846,7 @@ html[data-theme="light"] .info-hero{background:linear-gradient(135deg,rgba(255,2
 
 /* LANDSCAPE */
 @media (orientation: landscape) and (max-height: 500px) {
-  :root{ --hdr-h: 52px; --composer-h: 96px; }
+  :root{ --hdr-h: 52px; --composer-h: 96px; --pin-top: 49px; }
   .hdr{min-height:44px;padding:4px 8px;}
   #screen-list .main-hdr{min-height:52px;padding:6px 12px;}
   .circle-btn{width:38px;height:38px;}
@@ -856,6 +857,7 @@ html[data-theme="light"] .info-hero{background:linear-gradient(135deg,rgba(255,2
   .tnav-item{padding:6px 12px;font-size:11.5px;}
   .hdr.chat-hdr{min-height:52px;padding:6px 10px;}
   .hdr.chat-hdr .circle-btn{width:38px;height:38px;}
+  .pin-circle{left:58px;right:58px;height:42px;padding:0 12px;}
   .chat-hdr-center{height:42px;padding:3px 8px 3px 12px;}
   .chat-hdr-avatar{width:30px;height:30px;border-radius:9px;}
   .chat-hdr-name{font-size:13px;}
@@ -872,9 +874,9 @@ html[data-theme="light"] .info-hero{background:linear-gradient(135deg,rgba(255,2
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .msg.in{background:#1c1c1e;}
-  .msg.out{background:#2c2c2e;}
+  .msg.out{background:rgba(255,255,255,.14);}
   #messages[data-chat-type="channel"] .msg.in{background:#1c1c1e;}
-  #messages[data-chat-type="channel"] .msg.out{background:#2c2c2e;}
+  #messages[data-chat-type="channel"] .msg.out{background:rgba(255,255,255,.14);}
   .circle-btn,.brand-pill,.tnav-item,.chat-hdr-center,
   .composer-voice,.composer-mini,.composer-input-wrap{background:#181818;}
 }
@@ -913,3 +915,143 @@ html[data-theme="light"] .info-hero{background:linear-gradient(135deg,rgba(255,2
 .composer.warner-blocked .composer-blocked-msg{display:flex;flex:1;align-items:center;justify-content:center;min-height:36px;padding:0 10px;font-size:13px;font-weight:600;color:var(--text-3);text-align:center;}
 .composer.warner-blocked #msg-input{display:none !important;}
 .composer.warner-blocked .composer-input-wrap{align-items:center;}
+
+/* ✅ تیک‌های تأیید: دقیقاً وسط‌چین عمودی نسبت به اسم (بدون جابه‌جایی دستی) */
+img.vf[src*="yellow-tick"],
+img.vf[src*="green-tick"],
+img.vf[src*="personal-tick"] {
+    transform: translateY(var(--vf-shift)) scale(0.85);
+    transform-origin: center;
+}
+
+/* =========================================================
+   PIN: دایره‌ی پیام‌های سنجاق‌شده (۱ پیکسل زیر کپسول وسط هدر)
+   ========================================================= */
+.pin-circle{
+  position:absolute; top:var(--pin-top); left:68px; right:68px; height:46px; z-index:19;
+  display:none; align-items:center; justify-content:flex-start; gap:10px; padding:0 14px;
+  border-radius:999px; text-align:right;
+  background:rgba(24,24,24,.2);
+  backdrop-filter:blur(25px) saturate(180%); -webkit-backdrop-filter:blur(25px) saturate(180%);
+  border:none; border-top:1px solid rgba(255,255,255,.15); border-bottom:1px solid rgba(255,255,255,.15);
+  color:#fff; box-sizing:border-box; touch-action:manipulation; cursor:pointer;
+  transition:transform .15s, background .2s;
+}
+.pin-circle.show{display:flex; animation:pinIn .28s cubic-bezier(.32,.72,0,1);}
+@keyframes pinIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.pin-circle:active{transform:scale(.98); background:rgba(24,24,24,.5);}
+.pin-ico{display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.9}
+.pin-ico svg{fill:currentColor;transform:rotate(35deg);pointer-events:none}
+.pin-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:right;}
+.pin-title{font-size:11.5px;font-weight:700;line-height:1.2;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pin-text{font-size:13px;font-weight:500;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.msg-search-bar.show ~ .pin-circle{display:none !important;}
+#messages.has-pins{padding-top:calc(var(--hdr-h) + 52px);}
+.meta .meta-pin{display:inline-flex;align-items:center;opacity:.8}
+.meta .meta-pin svg{fill:currentColor;transform:rotate(35deg)}
+
+/* =========================================================
+   LIGHT THEME — کل برنامه سفید
+   ========================================================= */
+html[data-theme="light"] body,
+html[data-theme="light"] #app,
+html[data-theme="light"] .screen,
+html[data-theme="light"] #messages{background-color:#ffffff;}
+
+html[data-theme="light"] .circle-btn,
+html[data-theme="light"] .brand-pill,
+html[data-theme="light"] .chat-hdr-center,
+html[data-theme="light"] .tnav-item,
+html[data-theme="light"] .composer-mini,
+html[data-theme="light"] .composer-input-wrap,
+html[data-theme="light"] .composer-voice,
+html[data-theme="light"] .pin-circle{
+  background:rgba(120,120,128,.14);
+  border-top-color:rgba(0,0,0,.07); border-bottom-color:rgba(0,0,0,.07);
+  color:#1c1c1e;
+}
+html[data-theme="light"] .circle-btn:hover,
+html[data-theme="light"] .chat-hdr-center:hover{background:rgba(120,120,128,.22);}
+html[data-theme="light"] .circle-btn:active,
+html[data-theme="light"] .chat-hdr-center:active,
+html[data-theme="light"] .pin-circle:active{background:rgba(120,120,128,.32);}
+html[data-theme="light"] .composer-mini:active{background:rgba(120,120,128,.32);}
+html[data-theme="light"] .composer-input-wrap:focus-within{background:rgba(120,120,128,.22);}
+html[data-theme="light"] .composer-voice svg,
+html[data-theme="light"] .composer-mini svg{fill:#1c1c1e;}
+html[data-theme="light"] .brand-text,
+html[data-theme="light"] .chat-hdr-name{color:#000;}
+html[data-theme="light"] .chat-hdr-status{color:rgba(0,0,0,.5);}
+html[data-theme="light"] .tnav-item{color:rgba(0,0,0,.7);}
+html[data-theme="light"] .tnav-item.active{color:#fff;background:#6c6c6e;}
+html[data-theme="light"] .icon-btn{color:#1c1c1e;}
+html[data-theme="light"] .composer.warner-blocked .composer-input-wrap{background:rgba(120,120,128,.18);}
+html[data-theme="light"] .pc-edit-btn{background:rgba(24,24,24,.45) !important;}
+
+html[data-theme="light"] .msg.in{background:rgba(120,120,128,.13);border:none;color:#000;}
+html[data-theme="light"] #messages[data-chat-type="channel"] .msg.in{background:rgba(120,120,128,.13);border:none;color:#000;}
+html[data-theme="light"] #messages[data-chat-type="channel"] .msg.out{background:rgba(0,0,0,.06);border:none;color:#000;}
+html[data-theme="light"] .msg.in .meta,
+html[data-theme="light"] .msg.out .meta{color:rgba(0,0,0,.5);}
+html[data-theme="light"] .msg.out .meta .ticks{color:rgba(0,0,0,.4);}
+html[data-theme="light"] .msg.out .meta .ticks.read{color:#0a84ff;}
+html[data-theme="light"] .msg.ai{background:rgba(139,92,246,.08) !important;border:1px solid rgba(139,92,246,.25) !important;}
+html[data-theme="light"] .msg.ai .ai-label{color:#7c3aed;}
+html[data-theme="light"] .msg.ai .ai-label svg{fill:#7c3aed;}
+html[data-theme="light"] .typing.ai-thinking{background:rgba(139,92,246,.08) !important;border-color:rgba(139,92,246,.25) !important;}
+html[data-theme="light"] .msg-search-result .msr-text mark{color:#000;}
+html[data-theme="light"] .msg.search-hit .btext{box-shadow:inset 0 0 0 2px rgba(0,0,0,.25);}
+
+html[data-theme="light"] .reply-quote{background:rgba(0,0,0,.05);}
+html[data-theme="light"] .msg.out .reply-quote{background:rgba(0,0,0,.06);border-right-color:#6c6c6e;}
+html[data-theme="light"] .msg.out .reply-quote b{color:#3a3a3c;}
+html[data-theme="light"] .msg.out .reply-quote p{color:rgba(0,0,0,.6);}
+html[data-theme="light"] .vplay,
+html[data-theme="light"] .msg.in .vplay{background:rgba(0,0,0,.08);border-color:rgba(0,0,0,.08);color:#000;}
+html[data-theme="light"] .vplay svg{fill:#000;}
+html[data-theme="light"] .vplay.playing{background:rgba(108,108,110,.3)!important;}
+html[data-theme="light"] .msg.out .vwave i{background:#000;opacity:.6;}
+html[data-theme="light"] .filemsg .ficon,
+html[data-theme="light"] .msg.out .filemsg .ficon{background:rgba(0,0,0,.08);}
+html[data-theme="light"] .filemsg .ficon svg{fill:#000;}
+html[data-theme="light"] .msg.out .poll-container{background:rgba(0,0,0,.04);}
+html[data-theme="light"] .msg.out .poll-opt{background:rgba(0,0,0,.04);}
+html[data-theme="light"] .msg.out .poll-opt:hover{background:rgba(0,0,0,.08);}
+html[data-theme="light"] .msg.out .poll-opt-bar{background:rgba(0,0,0,.1);}
+html[data-theme="light"] .reaction-pill{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.08);}
+html[data-theme="light"] .reaction-pill:hover{background:rgba(0,0,0,.1);}
+html[data-theme="light"] .reaction-pill.mine{background:rgba(108,108,110,.2);border-color:rgba(108,108,110,.5);color:#3a3a3c;}
+html[data-theme="light"] .msg.out .reaction-pill{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.08);color:#000;}
+html[data-theme="light"] .msg.out .reaction-pill.mine{background:rgba(108,108,110,.22);border-color:rgba(108,108,110,.5);}
+html[data-theme="light"] .reaction-picker{background:rgba(255,255,255,.98);border-color:rgba(0,0,0,.1);box-shadow:0 6px 24px rgba(0,0,0,.15);}
+html[data-theme="light"] .reaction-picker button:active{background:rgba(0,0,0,.08);}
+html[data-theme="light"] .link-preview{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);}
+html[data-theme="light"] .msg.out .link-preview{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.08);}
+html[data-theme="light"] .link-preview:active{background:rgba(0,0,0,.09);}
+html[data-theme="light"] .msg.out .link-preview .lp-domain,
+html[data-theme="light"] .msg.out .mention-link{color:#3a3a3c;}
+html[data-theme="light"] .msg.out .mention-preview{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);}
+
+html[data-theme="light"] .info-username{color:#48484a;}
+html[data-theme="light"] .info-username.empty{background:rgba(0,0,0,.04);}
+html[data-theme="light"] .info-badge.verified{color:#48484a;}
+html[data-theme="light"] .info-badge.public{color:#16a34a;}
+html[data-theme="light"] .info-badge.private{color:#b45309;}
+html[data-theme="light"] .badge.muted{background:rgba(0,0,0,.15);}
+html[data-theme="light"] .search-clear{background:rgba(0,0,0,.08);}
+html[data-theme="light"] .av-color.sel{border-color:#000;}
+html[data-theme="light"] .av-upload{color:#48484a;}
+html[data-theme="light"] .msg-search-bar{background:#fff;}
+
+html[data-theme="light"] .update-box{background:#fff;border-color:rgba(0,0,0,.1);}
+html[data-theme="light"] .update-badge{color:#48484a;}
+html[data-theme="light"] .update-version{background:linear-gradient(180deg,#000,#6c6c6e);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+html[data-theme="light"] .update-title{color:#000;}
+html[data-theme="light"] .update-changelog{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.06);}
+html[data-theme="light"] .update-changelog .cl-item{color:rgba(0,0,0,.85);border-bottom-color:rgba(0,0,0,.08);}
+html[data-theme="light"] .backup-box{background:#fff;border-color:rgba(0,0,0,.1);}
+html[data-theme="light"] .backup-box h2{color:#000;}
+html[data-theme="light"] .backup-box .bbtn.secondary{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);}
+html[data-theme="light"] .backup-welcome{background:rgba(255,255,255,.85);}
+html[data-theme="light"] .modal-actions button:active{background:rgba(0,0,0,.06)!important;}
+html[data-theme="light"] #toast{box-shadow:0 4px 20px rgba(0,0,0,.15);}
