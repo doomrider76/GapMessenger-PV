@@ -2,7 +2,11 @@
 <html lang="fa" dir="rtl" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,shrink-to-fit=no,interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="گپ">
 <meta name="theme-color" content="#131313">
 <meta name="format-detection" content="telephone=no">
 <meta name="color-scheme" content="dark light">
@@ -12,7 +16,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="Logo.png">
 <link rel="manifest" href="manifest.json">
 
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=media1">
 </head>
 <body>
 
@@ -145,7 +149,7 @@
 
     <button class="pin-circle" id="pin-circle" aria-label="پیام سنجاق‌شده">
       <span class="pin-ico"><svg width="18" height="18"><use href="#i-pin"/></svg></span>
-      <span class="pin-info"><span class="pin-title" id="pin-title">پیام سنجاق‌شده</span><span class="pin-text" id="pin-text"></span></span>
+      <span class="pin-info"><span class="pin-title" id="pin-title"></span><span class="pin-text" id="pin-text"></span></span>
     </button>
 
     <div id="messages"></div>
@@ -230,6 +234,8 @@
 <div class="overlay" id="sheet-overlay"><div class="sheet" id="sheet-content"></div></div>
 <div class="overlay" id="emoji-overlay"><div class="sheet" id="emoji-panel"></div></div>
 <div class="overlay" id="avatar-overlay"><div class="sheet" id="avatar-panel"></div></div>
+<div class="overlay" id="comments-overlay"><div class="sheet cmt-sheet" id="comments-sheet"></div></div>
+<div class="viewer" id="viewer-overlay"></div>
 <div class="modal" id="modal"><div class="modal-box" id="modal-box"></div></div>
 
 <div class="update-overlay" id="update-overlay">
@@ -294,6 +300,6 @@
 
 <div id="toast"></div>
 
-<script src="script.js" defer></script>
+<script src="script.js?v=media1" defer></script>
 </body>
 </html>
