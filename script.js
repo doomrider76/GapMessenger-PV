@@ -1,5 +1,5 @@
 /* =========================================================
-   گپ v1.0.1 — Global Warner & Profile Fixes
+   گپ v1.0.2 — Real media, channel comments & signatures
    ========================================================= */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -8,7 +8,7 @@ const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const icon = (n, s = 20) => `<svg width="${s}" height="${s}"><use href="#i-${n}"/></svg>`;
 const KEY = 'pisfon_v3', BACKUP_KEY = 'pisfon_backup_auto', VERSION_KEY = 'pisfon_version';
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 // --- تاریخ عضویت (شمسی) ---
 function getPersianDate(ts = Date.now()) {
@@ -26,6 +26,16 @@ const setVP = () => {
   document.documentElement.style.setProperty('--vw', innerWidth * .01 + 'px');
 };
 setVP(); addEventListener('resize', setVP);
+/* فول‌اسکرین روی اندروید/سامسونگ وقتی داخل مرورگر باز می‌شود (iOS این API را ندارد؛ آنجا از «افزودن به صفحه اصلی» استفاده کن) */
+(function(){
+  const standalone = matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (standalone) return;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  const go = () => { try { const r = req.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(()=>{}); } catch {} };
+  addEventListener('pointerup', function once(){ removeEventListener('pointerup', once); go(); }, { once: true });
+})();
 addEventListener('orientationchange', () => setTimeout(setVP, 200));
 if (window.visualViewport) {
   const vv = visualViewport;
@@ -40,9 +50,10 @@ document.addEventListener('contextmenu', e => {
 
 /* ---------- constants ---------- */
 const CHANGELOG = [
-  'رفع مشکلات گزارش شده',
-  'افزایش سرعت برنامه',
-  'بهینه سازی برای گوشی های میان رده و پایین رده'
+  'ارسال واقعی عکس، ویدیو، فایل و ویس (قابل پخش و ذخیره)',
+  'کامنت زیر پست‌های کانال (از تنظیمات کانال فعال/غیرفعال می‌شود)',
+  'امضای پیام‌ها: نمایش نام نویسنده زیر هر پست کانال',
+  'ذخیره‌ی فایل‌ها در حافظه‌ی مرورگر بدون پر شدن حافظه‌ی برنامه'
 ];
 const AV_GRADS = [
   ['#ff6b6b','#c92a2a'],['#51cf66','#2b8a3e'],['#ffd43b','#e67700'],['#4dabf7','#1864ab'],
@@ -128,8 +139,12 @@ function normalizeChat(c, i) {
   if (c.type === 'group' && Array.isArray(c.membersList) && c.membersList.length > c.members) c.members = c.membersList.length;
   if (c.type === 'group' && !Array.isArray(c.membersList)) c.membersList = [];
   if (typeof c.warner !== 'string') c.warner = '';
+  if (typeof c.commentsEnabled !== 'boolean') c.commentsEnabled = false;
+  if (typeof c.signMessages !== 'boolean') c.signMessages = false;
+  if (typeof c.signSince !== 'number') c.signSince = c.signMessages ? Date.now() : 0;
   c.messages.forEach(m => {
     if (!m.reactions) m.reactions = {};
+    if (!Array.isArray(m.comments)) m.comments = [];
     if (typeof m.deleted !== 'boolean') m.deleted = false;
     if (typeof m.editedForAll !== 'boolean') m.editedForAll = false;
     if (typeof m.seenCount !== 'number') m.seenCount = 0;
@@ -192,6 +207,314 @@ function applyTheme() {
   try { if (typeof activeChatId !== 'undefined' && activeChatId) applyWallpaper(getChat(activeChatId)); } catch {}
 }
 applyTheme();
+
+/* ---------- media store (IndexedDB) — ذخیره‌ی واقعی عکس/ویدیو/ویس/فایل ---------- */
+const MEDIA_DB = 'gap_media', MEDIA_STORE = 'blobs';
+let _mdb = null, _persistAsked = false;
+const mediaSessionIds = new Set();
+function mediaDB() {
+  if (_mdb) return _mdb;
+  _mdb = new Promise((res, rej) => {
+    try {
+      if (!window.indexedDB) throw new Error('no-idb');
+      const rq = indexedDB.open(MEDIA_DB, 1);
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains(MEDIA_STORE)) rq.result.createObjectStore(MEDIA_STORE); };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error || new Error('idb'));
+      rq.onblocked = () => rej(new Error('idb-blocked'));
+    } catch (e) { rej(e); }
+  });
+  _mdb.catch(() => { _mdb = null; });
+  return _mdb;
+}
+function idbTx(mode, fn) {
+  return mediaDB().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(MEDIA_STORE, mode);
+    let out;
+    try { out = fn(tx.objectStore(MEDIA_STORE)); } catch (e) { rej(e); return; }
+    tx.oncomplete = () => res(out && 'result' in out ? out.result : undefined);
+    tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error || new Error('abort'));
+  }));
+}
+async function mediaPut(blob) {
+  if (!_persistAsked) { _persistAsked = true; try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {} }
+  const id = 'md_' + rid();
+  await idbTx('readwrite', s => s.put(blob, id));
+  mediaSessionIds.add(id);
+  return id;
+}
+const mediaGet = id => idbTx('readonly', s => s.get(id));
+const mediaAllKeys = () => idbTx('readonly', s => s.getAllKeys());
+const mediaDelete = ids => idbTx('readwrite', s => { ids.forEach(k => s.delete(k)); });
+
+const mediaUrls = new Map(), mediaPending = new Map();
+const mediaUrlSync = id => (id && mediaUrls.get(id)) || '';
+function mediaUrl(id) {
+  if (!id) return Promise.resolve('');
+  if (mediaUrls.has(id)) return Promise.resolve(mediaUrls.get(id));
+  if (mediaPending.has(id)) return mediaPending.get(id);
+  const p = mediaGet(id)
+    .then(b => { if (!b) return ''; const u = URL.createObjectURL(b); mediaUrls.set(id, u); return u; })
+    .catch(() => '')
+    .then(u => { mediaPending.delete(id); return u; });
+  mediaPending.set(id, p);
+  return p;
+}
+
+/* فایل‌هایی که دیگه هیچ پیامی بهشون اشاره نمی‌کنه از حافظه پاک می‌شن */
+function collectMediaIds() {
+  const ids = new Set();
+  const scan = chats => (chats || []).forEach(c => (c.messages || []).forEach(m => {
+    if (m.mediaId) ids.add(m.mediaId);
+    if (m.thumbId) ids.add(m.thumbId);
+  }));
+  scan(state.me && state.me.chats);
+  (state.accounts || []).forEach(a => scan(a.chats));
+  scan(state._globalDirectory);
+  return ids;
+}
+async function gcMedia() {
+  const keys = await mediaAllKeys();
+  const used = collectMediaIds();
+  const dead = keys.filter(k => !used.has(k) && !mediaSessionIds.has(k));
+  if (dead.length) await mediaDelete(dead);
+}
+async function wipeMedia() {
+  try { if (_mdb) { const db = await _mdb; db.close(); } } catch {}
+  _mdb = null; mediaUrls.clear(); mediaPending.clear();
+  try { indexedDB.deleteDatabase(MEDIA_DB); } catch {}
+}
+const mediaFields = m => ({ mediaId: m.mediaId || null, thumbId: m.thumbId || null, mime: m.mime || null, fname: m.fname || null, w: m.w || null, h: m.h || null });
+
+/* ---------- پخش‌کننده‌های ویدیو/صوت داخل پیام (بین رندرها زنده می‌مونن) ---------- */
+const mediaEls = new Map();      // msgId -> <video>/<audio>
+let mediaDeferred = false;
+function pauseAllMedia(except) { mediaEls.forEach(el => { if (el !== except && !el.paused) { try { el.pause(); } catch {} } }); }
+function resetMediaEls() { mediaEls.forEach(el => { try { el.pause(); } catch {} }); mediaEls.clear(); mediaDeferred = false; }
+
+function mountMediaEl(slot) {
+  const id = slot.dataset.slot, kind = slot.dataset.kind;
+  let el = mediaEls.get(id);
+  if (!el) {
+    const chat = getChat(activeChatId);
+    const m = chat && chat.messages.find(x => x.id === id);
+    if (!m || !m.mediaId) return;
+    el = document.createElement(kind === 'audio' ? 'audio' : 'video');
+    el.controls = true;
+    el.preload = 'metadata';
+    if (kind === 'video') { el.playsInline = true; el.setAttribute('playsinline', ''); el.setAttribute('webkit-playsinline', ''); }
+    el.addEventListener('error', () => toast('این فایل توسط مرورگر پخش نمی‌شود؛ از منوی پیام ذخیره‌اش کن', 'error'));
+    mediaEls.set(id, el);
+    if (kind === 'video' && m.thumbId) mediaUrl(m.thumbId).then(u => { if (u) el.poster = u; });
+    mediaUrl(m.mediaId).then(u => { if (u) el.src = u; });
+  }
+  if (!slot.contains(el)) slot.appendChild(el);
+}
+
+/* اگه یه ویدیو/صوت داره پخش می‌شه، حبابش رو دست نمی‌زنیم تا پخش قطع نشه */
+function patchMessages(box, html) {
+  const playing = [];
+  mediaEls.forEach((el, id) => { if (!el.paused && !el.ended && el.isConnected && box.contains(el)) playing.push(id); });
+  if (!playing.length) { box.innerHTML = html; return; }
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const kids = [...tpl.content.children];
+  const idOf = n => { const e = n.matches && n.matches('.msg[data-id]') ? n : n.querySelector && n.querySelector('.msg[data-id]'); return e ? e.dataset.id : null; };
+  const keep = new Map();
+  playing.forEach(id => {
+    const old = mediaEls.get(id).closest('.msg-group-row') || mediaEls.get(id).closest('.msg');
+    if (old && old.parentNode === box && kids.some(k => idOf(k) === id)) keep.set(id, old);
+  });
+  if (!keep.size) { box.innerHTML = html; return; }
+  const keptNodes = new Set(keep.values());
+  [...box.children].forEach(ch => { if (!keptNodes.has(ch)) ch.remove(); });
+  let ref = null;
+  for (let i = kids.length - 1; i >= 0; i--) {
+    const id = idOf(kids[i]);
+    if (id && keep.has(id)) ref = keep.get(id);
+    else box.insertBefore(kids[i], ref);
+  }
+  mediaDeferred = true;
+}
+
+function afterRender(box) {
+  box.querySelectorAll('img[data-mid]').forEach(img => {
+    if (img.getAttribute('src')) return;
+    mediaUrl(img.dataset.mid).then(u => { if (u) img.src = u; });
+  });
+  const live = new Set();
+  box.querySelectorAll('[data-slot]').forEach(slot => { live.add(slot.dataset.slot); mountMediaEl(slot); });
+  mediaEls.forEach((el, id) => { if (!live.has(id)) { try { el.pause(); } catch {} mediaEls.delete(id); } });
+  syncVoiceUI();
+}
+
+/* ---------- ارسال فایل واقعی ---------- */
+function fileKind(f) {
+  const t = (f.type || '').toLowerCase(), n = (f.name || '').toLowerCase();
+  if (t.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp|avif|svg)$/.test(n)) return 'image';
+  if (t.startsWith('video/') || /\.(mp4|m4v|mov|webm|ogv)$/.test(n)) return 'video';
+  if (t.startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/.test(n)) return 'audio';
+  return 'file';
+}
+function checkCanSend(chat) {
+  if (!chat) return false;
+  if (isWarnerChat(chat)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return false; }
+  if (chat.permissions && chat.permissions.sendMessages === 'admins' && (chat.type === 'group' || chat.type === 'channel')
+      && !(chat.admins || []).includes(state.me.name)) { toast('فقط مدیران می‌توانند پیام بفرستند', 'error'); return false; }
+  return true;
+}
+async function prepareImage(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('decode')); i.src = url; });
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) throw new Error('decode');
+    let thumb = null;
+    const keepOriginal = /gif|svg/.test(file.type || '');
+    if (!keepOriginal && (Math.max(w, h) > 1280 || file.size > 700 * 1024)) {
+      const ratio = Math.min(1280 / w, 1280 / h, 1);
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(w * ratio)); cv.height = Math.max(1, Math.round(h * ratio));
+      const ctx = cv.getContext('2d');
+      const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      if (outType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      thumb = await new Promise(r => cv.toBlob(r, outType, 0.84));
+    }
+    return { w, h, thumb };
+  } finally { URL.revokeObjectURL(url); }
+}
+function probeVideo(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.preload = 'metadata'; v.muted = true; v.playsInline = true;
+    let info = null, done = false;
+    const finish = r => {
+      if (done) return; done = true; clearTimeout(timer);
+      URL.revokeObjectURL(url); try { v.removeAttribute('src'); v.load(); } catch {}
+      resolve(r);
+    };
+    const timer = setTimeout(() => finish(info ? Object.assign(info, { poster: null }) : null), 8000);
+    v.onerror = () => finish(null);
+    v.onloadedmetadata = () => {
+      if (!v.videoWidth || !v.videoHeight) { finish(null); return; }
+      info = { w: v.videoWidth, h: v.videoHeight, dur: isFinite(v.duration) ? v.duration : 0 };
+      v.onseeked = () => {
+        try {
+          const ratio = Math.min(640 / info.w, 640 / info.h, 1);
+          const cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round(info.w * ratio)); cv.height = Math.max(1, Math.round(info.h * ratio));
+          cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+          cv.toBlob(b => finish(Object.assign(info, { poster: b })), 'image/jpeg', 0.8);
+        } catch { finish(Object.assign(info, { poster: null })); }
+      };
+      try { v.currentTime = Math.min(0.1, (info.dur || 0.2) / 2); } catch { finish(Object.assign(info, { poster: null })); }
+    };
+    v.src = url;
+  });
+}
+function probeAudio(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const a = new Audio();
+    a.preload = 'metadata';
+    let done = false;
+    const finish = r => { if (done) return; done = true; clearTimeout(timer); URL.revokeObjectURL(url); resolve(r); };
+    const timer = setTimeout(() => finish(0), 6000);
+    a.onerror = () => finish(null);
+    a.onloadedmetadata = () => finish(isFinite(a.duration) ? a.duration : 0);
+    a.src = url;
+  });
+}
+async function sendOneFile(f, chatId) {
+  if (!f.size) { toast('«' + (f.name || 'فایل') + '» خالی است', 'error'); return; }
+  const base = { size: fmtBytes(f.size), mime: f.type || 'application/octet-stream', fname: f.name || '' };
+  let kind = fileKind(f);
+  if (kind === 'image') {
+    let info = null;
+    try { info = await prepareImage(f); } catch {}
+    if (info) {
+      const mediaId = await mediaPut(f);
+      const thumbId = info.thumb ? await mediaPut(info.thumb) : mediaId;
+      sendMessage(Object.assign({ type: 'photo', text: '', mediaId, thumbId, w: info.w, h: info.h }, base), '', chatId);
+      return;
+    }
+    kind = 'file';
+  }
+  if (kind === 'video') {
+    const info = await probeVideo(f);
+    if (info) {
+      const mediaId = await mediaPut(f);
+      const thumbId = info.poster ? await mediaPut(info.poster) : null;
+      sendMessage(Object.assign({ type: 'video', text: '', mediaId, thumbId, w: info.w, h: info.h, dur: Math.round(info.dur * 10) / 10 }, base), '', chatId);
+      return;
+    }
+    kind = 'file';
+  }
+  if (kind === 'audio') {
+    const dur = await probeAudio(f);
+    if (dur !== null) {
+      const mediaId = await mediaPut(f);
+      sendMessage(Object.assign({ type: 'audio', text: '', mediaId, dur: Math.round(dur * 10) / 10 }, base), '', chatId);
+      return;
+    }
+  }
+  const mediaId = await mediaPut(f);
+  sendMessage(Object.assign({ type: 'file', text: f.name || 'file', mediaId }, base), '', chatId);
+}
+async function sendPickedFiles(files, chatId) {
+  const chat = getChat(chatId);
+  if (!checkCanSend(chat)) return;
+  const list = [...files];
+  if (list.length > 10) { toast('حداکثر ۱۰ فایل در هر بار', 'error'); list.length = 10; }
+  const big = list.some(f => f.size > 20 * 1048576);
+  if (big) toast('در حال ذخیره‌ی فایل…', 'info');
+  for (const f of list) {
+    try { await sendOneFile(f, chatId); }
+    catch (e) { console.error(e); toast('ارسال «' + (f.name || 'فایل') + '» ناموفق بود (حافظه‌ی مرورگر پر است؟)', 'error'); }
+  }
+}
+function pickMedia(accept) {
+  const chat = getChat(activeChatId);
+  if (!checkCanSend(chat)) return;
+  const chatId = chat.id;
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.multiple = true;
+  if (accept) inp.accept = accept;
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  const cleanup = () => setTimeout(() => inp.remove(), 1500);
+  inp.onchange = () => { const files = [...inp.files]; cleanup(); if (files.length) sendPickedFiles(files, chatId); };
+  inp.oncancel = cleanup;
+  inp.click();
+}
+async function downloadMedia(m) {
+  try {
+    const blob = await mediaGet(m.mediaId);
+    if (!blob) { toast('فایل پیدا نشد', 'error'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = m.fname || m.text || 'file';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    toast('ذخیره‌ی فایل شروع شد', 'success');
+  } catch { toast('ذخیره‌ی فایل ممکن نشد', 'error'); }
+}
+
+/* نمایش تمام‌صفحه‌ی عکس */
+function openViewer(m) {
+  const ov = $('#viewer-overlay');
+  if (!ov) return;
+  ov.innerHTML = `<button class="vw-btn vw-close" aria-label="بستن">${icon('close', 22)}</button><button class="vw-btn vw-dl" aria-label="ذخیره">${icon('arrow-down', 22)}</button><img alt="" draggable="false">`;
+  const img = ov.querySelector('img');
+  img.src = mediaUrlSync(m.thumbId || m.mediaId) || '';
+  mediaUrl(m.mediaId).then(u => { if (u) img.src = u; });
+  ov.dataset.msg = m.id;
+  ov.classList.add('show');
+}
+function closeViewer() { const ov = $('#viewer-overlay'); if (ov) { ov.classList.remove('show'); setTimeout(() => { if (!ov.classList.contains('show')) ov.innerHTML = ''; }, 250); } }
 
 /* ---------- helpers ---------- */
 function nameColors(name) {
@@ -339,7 +662,9 @@ function previewText(c) {
   if (m.deleted) t = '🚫 پیام حذف شد';
   else if (m.type === 'voice') t = '🎤 پیام صوتی';
   else if (m.type === 'photo') t = '🖼 عکس';
-  else if (m.type === 'file') t = '📎 فایل';
+  else if (m.type === 'video') t = '🎬 ویدیو';
+  else if (m.type === 'audio') t = '🎵 ' + (m.fname || 'فایل صوتی');
+  else if (m.type === 'file') t = '📎 ' + (m.text || 'فایل');
   else if (m.type === 'poll') t = '📊 نظرسنجی';
   else if (m.type === 'location') t = '📍 موقعیت';
   else if (m.type === 'warning') t = '⚠️ اخطار سیستمی';
@@ -440,6 +765,7 @@ function syncMessageToTargetAccount(targetUsername, messageData, senderInfo) {
     targetAcc.chats.push(targetChat);
   } else {
     targetChat.unread = (targetChat.unread || 0) + 1;
+    targetChat.badgeType = senderInfo.badgeType || null;
   }
   targetChat.messages.push(Object.assign({}, messageData, { out: false, status: 'read' }));
   save();
@@ -508,6 +834,28 @@ function setBadgeEverywhere(entity, badgeType) {
   if (state.globalWarner && refKind === 'user' && sameIdentity(state.globalWarner, ref)) state.globalWarner.badgeType = bt;
 }
 
+/* ✅ منبع حقیقیِ نشانِ هر کاربر، خودِ اکانتِ اوست. این تابع نشانِ همه‌ی چت‌ها/مخاطبین/دایرکتوری‌ها را در همه‌ی اکانت‌ها با نشانِ اکانتِ واقعی یکی می‌کند
+   (چتی که بعداً ساخته شده یا نسخه‌ی قدیمی داشته باشد هم درست می‌شود) */
+function syncBadgesFromAccounts() {
+  const all = [state.me, ...(state.accounts || [])].filter(Boolean);
+  const accFor = e => {
+    if (!e) return null;
+    if (e.username) return all.find(a => a.username && normUser(a.username) === normUser(e.username)) || null;
+    return all.find(a => !a.username && a.name === e.name) || null;
+  };
+  const fix = e => {
+    if (!e || e.type === 'saved' || e.type === 'ai' || e.type === 'group' || e.type === 'channel') return;
+    const a = accFor(e);
+    if (a && (a.badgeType || null) !== (e.badgeType || null)) e.badgeType = a.badgeType || null;
+  };
+  all.forEach(acc => {
+    (acc.chats || []).forEach(fix);
+    (acc.contacts || []).forEach(fix);
+  });
+  (state._globalDirectory || []).forEach(fix);
+  if (state.globalWarner) fix(state.globalWarner);
+}
+
 function isWarnerChat(chat) {
   if (!state.globalWarner || !chat) return false;
   return (chat.username && state.globalWarner.username && normUser(chat.username) === normUser(state.globalWarner.username)) ||
@@ -519,6 +867,7 @@ let chatFilter = 'all';
 let searchDebounce;
 
 function renderChatList() {
+  syncBadgesFromAccounts();
   const q = ($('#search-input')?.value || '').trim();
   const ql = q.toLowerCase();
   const box = $('#chat-list');
@@ -602,6 +951,7 @@ function renderChatList() {
 }
 
 function renderContacts() {
+  syncBadgesFromAccounts();
   const box = $('#contacts-list');
   if (!box) return;
   if (!state.contacts.length) {
@@ -757,6 +1107,10 @@ $('#btn-save-new-acc').addEventListener('click', () => {
   const newAcc = emptyAccount();
   newAcc.name = name;
   newAcc.username = username;
+  if (username) {
+    const known = [state.me, ...state.accounts].flatMap(a => a.chats || []).find(c => c.username && normUser(c.username) === normUser(username) && c.badgeType);
+    if (known) newAcc.badgeType = known.badgeType;
+  }
   newAcc.avatar = { type: 'gradient', value: Math.floor(Math.random() * AV_GRADS.length) };
   state.accounts.push(state.me);
   state.me = newAcc;
@@ -964,23 +1318,43 @@ function simulatePollVotes(chat, pollMsg) {
 /* ---------- Pinned messages ---------- */
 const pinCursor = {};
 function getPinned(chat) { return chat ? chat.messages.filter(m => m.pinned && !m.deleted) : []; }
+function pinPreview(m) {
+  if (m.type === 'photo') return '📷 ' + (m.text || 'عکس');
+  if (m.type === 'voice') return '🎤 پیام صوتی';
+  if (m.type === 'video') return '🎬 ' + (m.text || 'ویدیو');
+  if (m.type === 'audio') return '🎵 ' + (m.fname || 'فایل صوتی');
+  if (m.type === 'file') return '📎 ' + (m.text || 'فایل');
+  if (m.type === 'location') return '📍 موقعیت مکانی';
+  if (m.type === 'poll') return '📊 ' + (m.poll && m.poll.question || 'نظرسنجی');
+  if (m.type === 'warning' || m.isWarning) return '⚠️ اخطار';
+  return String(m.text || '').replace(/\s+/g, ' ').trim();
+}
+function pinIndex(chat, n) {
+  let i = pinCursor[chat.id];
+  return (i === undefined || i < 0 || i >= n) ? n - 1 : i;
+}
 function updatePinCircle() {
   const btn = $('#pin-circle'), box = $('#messages');
   if (!btn) return;
-  const n = getPinned(getChat(activeChatId)).length;
+  const chat = getChat(activeChatId);
+  const list = getPinned(chat);
+  const n = list.length;
   btn.classList.toggle('show', n > 0);
   if (box) box.classList.toggle('has-pins', n > 0);
-  const cnt = $('#pin-count');
-  if (cnt) { cnt.textContent = n > 1 ? n.toLocaleString('fa-IR') : ''; cnt.style.display = n > 1 ? 'flex' : 'none'; }
+  if (!n) return;
+  const i = pinIndex(chat, n);
+  const t = $('#pin-title'), x = $('#pin-text');
+  if (t) t.textContent = n > 1 ? `پیام سنجاق‌شده ${(i + 1).toLocaleString('fa-IR')} از ${n.toLocaleString('fa-IR')}` : 'پیام سنجاق‌شده';
+  if (x) x.textContent = pinPreview(list[i]) || 'پیام';
 }
 function jumpToNextPinned() {
   const chat = getChat(activeChatId);
   const list = getPinned(chat);
   if (!list.length) { updatePinCircle(); return; }
-  let i = pinCursor[chat.id];
-  i = (i === undefined || i >= list.length || i < 0) ? list.length - 1 : (i - 1 < 0 ? list.length - 1 : i - 1);
-  pinCursor[chat.id] = i;
+  const i = pinIndex(chat, list.length);
   const m = list[i];
+  pinCursor[chat.id] = i - 1 < 0 ? list.length - 1 : i - 1;
+  updatePinCircle();
   const el = $(`#messages .msg[data-id="${m.id}"]`);
   if (!el) { toast('پیام سنجاق‌شده در دسترس نیست', 'info'); return; }
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -1022,13 +1396,22 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
         <div class="wc-reason">${esc(reasonTxt)}</div>
       </div>
     `;
+  } else if (m.type === 'photo' && m.mediaId) {
+    const pid = m.thumbId || m.mediaId, psrc = mediaUrlSync(pid);
+    const ar = (m.w && m.h) ? Math.min(1.8, Math.max(0.6, m.w / m.h)) : 1;
+    inner += `<div class="mbox photo" data-view="${esc(m.id)}" style="aspect-ratio:${ar}"><img data-mid="${esc(pid)}" ${psrc ? `src="${esc(psrc)}"` : ''} alt="" draggable="false">${m.text ? `<div class="cap">${esc(m.text)}</div>` : ''}</div>`;
+  } else if (m.type === 'video' && m.mediaId) {
+    const ar = (m.w && m.h) ? Math.min(1.8, Math.max(0.6, m.w / m.h)) : 16 / 9;
+    inner += `<div class="mbox video" data-slot="${esc(m.id)}" data-kind="video" style="aspect-ratio:${ar}"></div>`;
+  } else if (m.type === 'audio' && m.mediaId) {
+    inner += `<div class="audiobox"><div class="abox-name">🎵 <span>${esc(m.fname || 'فایل صوتی')}</span></div><div class="abox-slot" data-slot="${esc(m.id)}" data-kind="audio"></div></div>`;
   } else if (m.type === 'photo') {
     if (m.dataUrl) inner += `<div class="media" style="background:#000"><img src="${esc(m.dataUrl)}" alt="">${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
     else inner += `<div class="media" style="background:${m.bg||'linear-gradient(135deg,#667eea,#764ba2)'}">${icon('camera',56)}${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
   } else if (m.type === 'location') {
     inner += `<div class="media" style="background:linear-gradient(135deg,#43cea2,#185a9d)">${icon('location',56)}${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
   } else if (m.type === 'file') {
-    inner += `<div class="filemsg"><div class="ficon">${icon('file',22)}</div><div class="fmeta"><span class="fname">${esc(m.text)}</span><span class="fsize">${esc(m.size||'2.4 MB')}</span></div></div>`;
+    inner += `<div class="filemsg${m.mediaId ? ' dl' : ''}"${m.mediaId ? ` data-dl="${esc(m.id)}"` : ''}><div class="ficon">${icon(m.mediaId ? 'arrow-down' : 'file',22)}</div><div class="fmeta"><span class="fname">${esc(m.text)}</span><span class="fsize">${esc(m.size||'2.4 MB')}</span></div></div>`;
   } else if (m.type === 'voice') {
     const bars = Array.from({length:22},(_,i) => `<i style="height:${7+((i*13+(m.dur||3)*7)%16)}px"></i>`).join('');
     inner += `<div class="voice"><button class="vplay" data-play="${m.id}">${icon('play',16)}</button><div class="vwave">${bars}</div><span class="vdur">${fmtDur(m.dur||0)}</span></div>`;
@@ -1068,7 +1451,12 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
   const metaText = `${fmtTime(m.ts)}${m.editedForAll?' · ویرایش‌شده':(m.edited?' ✎':'')}`;
   const seen = (chat.type === 'channel' && m.out && (m.seenCount || m.seenTarget)) ? `<span class="msg-seen">${icon('eye',13)} ${fmtNum(m.seenCount||0)}</span>` : '';
   const pinMark = (m.pinned && !m.deleted) ? `<span class="meta-pin">${icon('pin',11)}</span>` : '';
-  const msgInner = `${inner}<div class="meta">${pinMark}<span>${metaText}</span>${seen}${ticks}</div>`;
+  const signOn = chat.type === 'channel' && chat.signMessages && m.ts >= (chat.signSince || 0) && !m.deleted && m.type !== 'warning';
+  const authorHtml = signOn ? `<span class="meta-author">${esc(m.author || (m.out ? state.me.name : chat.name))}</span><span class="meta-dot">·</span>` : '';
+  const cmtCount = (m.comments || []).length;
+  const cmtBtn = (chat.type === 'channel' && chat.commentsEnabled && !m.deleted && m.type !== 'warning')
+    ? `<div class="cmt-btn" data-cmt="${esc(m.id)}">${icon('chat-outline',17)}<span>${cmtCount ? fmtNum(cmtCount) + ' نظر' : 'ارسال نظر'}</span><span class="cmt-chev">${icon('chevron',16)}</span></div>` : '';
+  const msgInner = `${inner}<div class="meta">${pinMark}${authorHtml}<span>${metaText}</span>${seen}${ticks}</div>${cmtBtn}`;
 
   if (chat.type === 'group' && !m.out && m.type !== 'warning') {
     const sender = m.sender || 'عضو';
@@ -1135,11 +1523,13 @@ function renderMessages(scroll = true) {
     } else html += `<div class="msg${typingCls}"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
   }
 
-  box.innerHTML = html;
+  patchMessages(box, html);
+  afterRender(box);
   if (scroll) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
 }
 
 function renderChatHeader() {
+  syncBadgesFromAccounts();
   const c = getChat(activeChatId);
   if (!c) return;
   const av = $('#chat-avatar');
@@ -1237,6 +1627,7 @@ function applyComposerLock(c) {
 function openChat(id) {
   const c = getChat(id);
   if (!c) return;
+  if (activeChatId !== id) { resetMediaEls(); stopVoice(); }
   activeChatId = id;
   c.unread = 0; c.typing = false; c.typingSender = null;
   replyToMsg = null; hideReplyBar(); closeMsgSearch(); closeProfilePreview();
@@ -1256,6 +1647,7 @@ function closeChat() {
   if (c && $('#msg-input') && !isWarnerChat(c)) c.draft = $('#msg-input').value || '';
   document.body.classList.remove('in-chat');
   $('#screen-chat').classList.remove('open');
+  resetMediaEls(); stopVoice();
   activeChatId = null; replyToMsg = null;
   hideReplyBar(); closeMsgSearch(); renderChatList(); save();
 }
@@ -1277,6 +1669,7 @@ function closeInfo() {
 }
 
 function renderInfo() {
+  syncBadgesFromAccounts();
   const c = getChat(infoChatId);
   if (!c) return;
   const isGC = c.type === 'group' || c.type === 'channel';
@@ -1321,6 +1714,13 @@ function renderInfo() {
       <div class="row" data-info-act="set-badge"><span class="r-icon" style="background:#6c6c6e">${icon('verified',20)}</span><span class="r-text">نشان تایید</span><span class="r-val">${c.badgeType ? BADGES[c.badgeType].title : 'بدون نشان'}</span><span class="chev">${icon('chevron',18)}</span></div>
     </div>` : '';
 
+  const chanGrp = c.type === 'channel' ? `
+    <div class="section-title">تنظیمات کانال</div>
+    <div class="group">
+      <div class="row" data-info-act="toggle-comments"><span class="r-icon purple">${icon('chat-outline',20)}</span><span class="r-text">کامنت زیر پست‌ها</span><label class="switch"><input type="checkbox" data-chset="commentsEnabled" ${c.commentsEnabled?'checked':''}><span class="sl"></span></label></div>
+      <div class="row" data-info-act="toggle-sign"><span class="r-icon purple">${icon('edit',20)}</span><span class="r-text">امضای پیام‌ها (نام نویسنده)</span><label class="switch"><input type="checkbox" data-chset="signMessages" ${c.signMessages?'checked':''}><span class="sl"></span></label></div>
+    </div>` : '';
+
   const permsGrp = isGC ? `
     <div class="section-title">مجوزها</div>
     <div class="group">
@@ -1332,7 +1732,7 @@ function renderInfo() {
 
   $('#info-body').innerHTML = `
     <div class="info-hero has-cover">${cover}<div class="avatar big info-avatar-overlay" id="info-avatar-btn" style="${avatarBgStyle(c)}">${avatarContent(c)}</div><div class="info-name">${esc(c.name)}${vfHTML(c.badgeType,26)}</div>${uBlock}${badges?`<div class="info-badges">${badges}</div>`:''}${stats}${joinedDate}</div>
-    ${desc}${settingsGrp}${permsGrp}${membersList}${joinLeave}
+    ${desc}${settingsGrp}${chanGrp}${permsGrp}${membersList}${joinLeave}
     <div class="section-title">عملیات</div>
     <div class="group">
       <div class="row" data-info-act="toggle-mute"><span class="r-icon">${icon(c.muted?'bell':'bell-off',20)}</span><span class="r-text">${c.muted?'فعال کردن اعلان':'بی‌صدا کردن'}</span></div>
@@ -1345,6 +1745,9 @@ function renderInfo() {
   $$('#info-body [data-info-act]').forEach(el => el.addEventListener('click', e => {
     if (e.target.tagName === 'INPUT' || e.target.closest('label.switch')) return;
     handleInfoAction(el.dataset.infoAct, c);
+  }));
+  $$('#info-body input[data-chset]').forEach(inp => inp.addEventListener('change', () => {
+    handleInfoAction(inp.dataset.chset === 'commentsEnabled' ? 'toggle-comments' : 'toggle-sign', c);
   }));
   $$('#info-body [data-member-name]').forEach(el => el.addEventListener('click', e => {
     if (e.target.tagName === 'INPUT' || e.target.closest('label.switch')) return;
@@ -1392,6 +1795,17 @@ function pickCoverImage(chat) {
 }
 
 function handleInfoAction(act, c) {
+  if (act === 'toggle-comments') {
+    c.commentsEnabled = !c.commentsEnabled;
+    renderInfo(); if (activeChatId === c.id) renderMessages(false); save();
+    toast(c.commentsEnabled ? 'کامنت‌ها فعال شد' : 'کامنت‌ها غیرفعال شد', 'info'); return;
+  }
+  if (act === 'toggle-sign') {
+    c.signMessages = !c.signMessages;
+    if (c.signMessages) c.signSince = Date.now();
+    renderInfo(); if (activeChatId === c.id) renderMessages(false); save();
+    toast(c.signMessages ? 'امضای پیام‌ها روشن شد' : 'امضای پیام‌ها خاموش شد', 'info'); return;
+  }
   if (act === 'join-chat') {
     c.joined = true;
     const di = (state.directory||[]).findIndex(d => d.id === c.id);
@@ -1753,8 +2167,8 @@ function toggleReaction(m, emoji, chat) {
 }
 
 /* ---------- send ---------- */
-function sendMessage(extra = {}, textOverride) {
-  const chat = getChat(activeChatId);
+function sendMessage(extra = {}, textOverride, chatIdOverride) {
+  const chat = getChat(chatIdOverride || activeChatId);
   if (!chat) return;
   if (isWarnerChat(chat)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; }
   const inp = $('#msg-input');
@@ -1767,9 +2181,9 @@ function sendMessage(extra = {}, textOverride) {
     if (!isAdmin) { toast('فقط مدیران می‌توانند پیام بفرستند', 'error'); return; }
   }
   const m = Object.assign({
-    id:rid(), text, out:true, ts:Date.now(), status:'sent', type:'text',
-    replyTo:replyToMsg, reactions:{}, deleted:false, editedForAll:false,
-    seenCount:0, seenTarget:0, linkPreview:null, _fakeReactionCounts:{}
+    id:rid(), text, out:true, ts:Date.now(), status:'sent', type:'text', author:state.me.name,
+    replyTo:(chat.id === activeChatId ? replyToMsg : null), reactions:{}, deleted:false, editedForAll:false,
+    seenCount:0, seenTarget:0, linkPreview:null, _fakeReactionCounts:{}, comments:[]
   }, extra);
   if (m.type === 'text' && m.text) {
     const u = firstUrl(m.text);
@@ -1784,9 +2198,10 @@ function sendMessage(extra = {}, textOverride) {
     const _tb = $('#btn-send-text');
     if (_tb) _tb.classList.remove('show');
   }
-  replyToMsg = null; hideReplyBar();
-  renderMessages(); renderChatList();
+  if (chat.id === activeChatId) { replyToMsg = null; hideReplyBar(); renderMessages(); }
+  renderChatList();
   if (chat.type === 'channel') startSeenSim(chat, m);
+  if (chat.type === 'channel' && chat.commentsEnabled) simAIComments(chat, m, 2 + Math.floor(Math.random() * 4));
   if (chat.type !== 'saved') simFakeReactions(chat, m);
   setTimeout(() => { m.status = 'delivered'; if (activeChatId === chat.id) renderMessages(false); save(); }, 600);
   setTimeout(() => { m.status = 'read'; if (activeChatId === chat.id) renderMessages(false); save(); }, 1700);
@@ -1938,12 +2353,12 @@ if (sendTextBtn) {
 }
 
 /* ---------- voice recording ---------- */
-let recInterval = null, recStart = 0, recActive = false;
+let recInterval = null, recStart = 0, recActive = false, recChatId = null;
 let mediaRecorder = null, chunks = [], stream = null;
 
 async function startRec() {
-  { const _c = getChat(activeChatId); if (_c && isWarnerChat(_c)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; } }
-  recActive = true; recStart = Date.now(); chunks = [];
+  if (!checkCanSend(getChat(activeChatId))) return;
+  recActive = true; recStart = Date.now(); chunks = []; recChatId = activeChatId;
   $('#composer').style.display = 'none';
   $('#rec-bar').classList.add('show');
   $('#rec-time').textContent = '0:00';
@@ -1980,12 +2395,11 @@ function stopRec(cancel) {
       const blob = new Blob(chunks, {type:mediaRecorder.mimeType || 'audio/webm'});
       cleanup();
       if (cancel || dur < 0.8) { toast('ضبط لغو شد', 'info'); return; }
-      const reader = new FileReader();
-      reader.onload = () => {
-        sendMessage({ type:'voice', dur:Math.round(dur*10)/10, dataUrl:reader.result, size:fmtBytes(blob.size) }, '');
+      const vChatId = recChatId;
+      mediaPut(blob).then(mediaId => {
+        sendMessage({ type:'voice', dur:Math.round(dur*10)/10, mediaId, mime:blob.type || 'audio/webm', size:fmtBytes(blob.size) }, '', vChatId);
         toast('پیام صوتی ارسال شد', 'success');
-      };
-      reader.readAsDataURL(blob);
+      }).catch(() => toast('ذخیره‌ی پیام صوتی ممکن نشد', 'error'));
     };
     try { mediaRecorder.stop(); } catch { cleanup(); }
   } else {
@@ -2011,8 +2425,62 @@ const rbClose = $('#rb-close');
 if (rbClose) rbClose.addEventListener('click', hideReplyBar);
 
 /* ---------- messages click / double tap / long press / right click ---------- */
-let currentAudio = null, currentAudioBtn = null;
+let currentAudio = null, currentAudioBtn = null, currentAudioMsgId = null;
 
+function setVoiceBtn(btn, playing) {
+  if (!btn) return;
+  btn.innerHTML = icon(playing ? 'pause' : 'play', 16);
+  btn.classList.toggle('playing', !!playing);
+  const msg = btn.closest('.msg');
+  if (msg) msg.querySelectorAll('.vwave i').forEach((b, i) => { b.style.animation = playing ? `vpulse .45s ${i*0.04}s infinite alternate` : ''; });
+}
+function setVoiceTime(msgId, sec, total) {
+  const el = document.querySelector(`#messages .msg[data-id="${msgId}"] .vdur`);
+  if (el) el.textContent = fmtDur(sec != null ? sec : total);
+}
+function stopVoice() {
+  const id = currentAudioMsgId;
+  if (currentAudio) { try { currentAudio.pause(); } catch {} }
+  setVoiceBtn(currentAudioBtn, false);
+  if (id) {
+    const chat = getChat(activeChatId), m = chat && chat.messages.find(x => x.id === id);
+    setVoiceTime(id, null, m ? (m.dur || 0) : 0);
+  }
+  currentAudio = null; currentAudioBtn = null; currentAudioMsgId = null;
+}
+function syncVoiceUI() {
+  if (!currentAudio || !currentAudioMsgId) return;
+  const btn = document.querySelector(`#messages .msg[data-id="${currentAudioMsgId}"] .vplay`);
+  if (!btn) return;
+  currentAudioBtn = btn;
+  setVoiceBtn(btn, !currentAudio.paused);
+  setVoiceTime(currentAudioMsgId, currentAudio.currentTime, 0);
+}
+async function toggleVoice(btn, m) {
+  if (currentAudio && currentAudioMsgId === m.id) {
+    if (currentAudio.paused) { currentAudio.play().catch(() => {}); setVoiceBtn(btn, true); }
+    else { currentAudio.pause(); setVoiceBtn(btn, false); }
+    return;
+  }
+  stopVoice();
+  pauseAllMedia();
+  if (!m.mediaId && !m.dataUrl) {            // پیام‌های قدیمیِ شبیه‌سازی‌شده
+    setVoiceBtn(btn, true);
+    setTimeout(() => setVoiceBtn(btn, false), (m.dur || 3) * 1000);
+    return;
+  }
+  const src = m.mediaId ? await mediaUrl(m.mediaId) : m.dataUrl;
+  if (!src) { toast('فایل صوتی پیدا نشد', 'error'); return; }
+  const a = new Audio(src);
+  currentAudio = a; currentAudioBtn = btn; currentAudioMsgId = m.id;
+  setVoiceBtn(btn, true);
+  a.ontimeupdate = () => { if (currentAudio === a) setVoiceTime(m.id, a.currentTime, 0); };
+  a.onended = () => { if (currentAudio === a) stopVoice(); };
+  a.onerror = () => { if (currentAudio === a) { stopVoice(); toast('این پیام صوتی پخش نشد', 'error'); } };
+  a.play().catch(() => { if (currentAudio === a) { stopVoice(); toast('پخش ممکن نشد', 'error'); } });
+}
+
+let lastLongPressTs = 0;
 $('#messages').addEventListener('click', e => {
   const mp = e.target.closest('.mention-preview');
   if (mp) { openProfilePreview(mp.dataset.mentionPreview); return; }
@@ -2025,57 +2493,48 @@ $('#messages').addEventListener('click', e => {
     if (m) { toggleReaction(m, rp.dataset.reactEmoji, chat); renderMessages(false); save(); }
     return;
   }
+  const recentLong = Date.now() - lastLongPressTs < 700;
+  const cb = e.target.closest('.cmt-btn');
+  if (cb) { if (!recentLong) openComments(activeChatId, cb.dataset.cmt); return; }
+  const fd = e.target.closest('.filemsg[data-dl]');
+  if (fd) {
+    if (recentLong) return;
+    const chat = getChat(activeChatId), m = chat && chat.messages.find(x => x.id === fd.dataset.dl);
+    if (m && m.mediaId) downloadMedia(m);
+    return;
+  }
+  const pv = e.target.closest('.mbox.photo[data-view]');
+  if (pv) {
+    if (recentLong) return;
+    const chat = getChat(activeChatId), m = chat && chat.messages.find(x => x.id === pv.dataset.view);
+    if (m) openViewer(m);
+    return;
+  }
   const btn = e.target.closest('.vplay');
   if (!btn) return;
   const msgEl = btn.closest('.msg');
   const chat = getChat(activeChatId);
   const m = chat.messages.find(x => x.id === msgEl.dataset.id);
   if (!m) return;
-  if (currentAudio && currentAudioBtn === btn) {
-    if (currentAudio.paused) { currentAudio.play().catch(()=>{}); btn.innerHTML = icon('pause',16); btn.classList.add('playing'); }
-    else { currentAudio.pause(); btn.innerHTML = icon('play',16); btn.classList.remove('playing'); }
-    return;
-  }
-  if (currentAudio) {
-    try { currentAudio.pause(); } catch {}
-    if (currentAudioBtn) {
-      currentAudioBtn.innerHTML = icon('play',16);
-      currentAudioBtn.classList.remove('playing');
-      const pm = currentAudioBtn.closest('.msg');
-      if (pm) pm.querySelectorAll('.vwave i').forEach(b => b.style.animation = '');
-    }
-  }
-  if (m.dataUrl) {
-    currentAudio = new Audio(m.dataUrl);
-    currentAudioBtn = btn;
-    btn.innerHTML = icon('pause',16);
-    btn.classList.add('playing');
-    const bars = msgEl.querySelectorAll('.vwave i');
-    bars.forEach((b,i) => b.style.animation = `vpulse .45s ${i*0.04}s infinite alternate`);
-    const stop = () => {
-      btn.innerHTML = icon('play',16);
-      btn.classList.remove('playing');
-      bars.forEach(b => b.style.animation = '');
-      currentAudio = null; currentAudioBtn = null;
-    };
-    currentAudio.onended = stop;
-    currentAudio.onerror = stop;
-    currentAudio.play().catch(stop);
-    return;
-  }
-  btn.innerHTML = icon('pause',16);
-  btn.classList.add('playing');
-  const bars = msgEl.querySelectorAll('.vwave i');
-  bars.forEach((b,i) => b.style.animation = `vpulse .45s ${i*0.04}s infinite alternate`);
-  setTimeout(() => {
-    btn.innerHTML = icon('play',16);
-    btn.classList.remove('playing');
-    bars.forEach(b => b.style.animation = '');
-  }, (m.dur || 3) * 1000);
+  toggleVoice(btn, m);
 });
+
+/* وقتی یه ویدیو/صوت شروع به پخش می‌کنه، بقیه (و ویس‌ها) ساکت می‌شن */
+$('#messages').addEventListener('play', e => {
+  if (e.target.tagName !== 'VIDEO' && e.target.tagName !== 'AUDIO') return;
+  stopVoice(); pauseAllMedia(e.target);
+}, true);
+['pause', 'ended'].forEach(ev => $('#messages').addEventListener(ev, e => {
+  if (e.target.tagName !== 'VIDEO' && e.target.tagName !== 'AUDIO') return;
+  if (mediaDeferred && !$$('#messages video, #messages audio').some(x => !x.paused && !x.ended)) {
+    mediaDeferred = false;
+    setTimeout(() => { if (activeChatId) renderMessages(false); }, 60);
+  }
+}, true));
 
 let lastTapTime = 0, lastTapId = null;
 $('#messages').addEventListener('pointerup', e => {
+  if (e.target.closest('.cmt-btn, video, audio')) return;
   if (e.target.closest('.mention-preview') || e.target.closest('.mention-link') ||
       e.target.closest('.link-preview') || e.target.closest('.reaction-pill') || e.target.closest('.poll-opt')) return;
   const el = e.target.closest('.msg');
@@ -2091,6 +2550,7 @@ $('#messages').addEventListener('pointerup', e => {
 
 let pressTimer = null, pressStart = null, pressedMsgEl = null;
 $('#messages').addEventListener('pointerdown', e => {
+  if (e.target.closest('.cmt-btn, video, audio')) return;
   if (e.target.closest('.reaction-pill') || e.target.closest('.mention-preview') ||
       e.target.closest('.mention-link') || e.target.closest('.link-preview') || e.target.closest('.poll-opt')) return;
   const el = e.target.closest('.msg');
@@ -2098,7 +2558,7 @@ $('#messages').addEventListener('pointerdown', e => {
   pressStart = {x:e.clientX, y:e.clientY};
   pressedMsgEl = el;
   pressTimer = setTimeout(() => {
-    if (pressedMsgEl) { if (navigator.vibrate) navigator.vibrate(15); showMsgMenu(pressedMsgEl); }
+    if (pressedMsgEl) { lastLongPressTs = Date.now(); if (navigator.vibrate) navigator.vibrate(15); showMsgMenu(pressedMsgEl); }
     pressTimer = null; pressStart = null;
   }, 450);
 });
@@ -2112,6 +2572,7 @@ $('#messages').addEventListener('pointermove', e => {
   $('#messages').addEventListener(ev, () => { clearTimeout(pressTimer); pressTimer = null; pressStart = null; }));
 
 $('#messages').addEventListener('contextmenu', e => {
+  if (e.target.closest('.cmt-btn, video, audio')) { e.preventDefault(); return; }
   const el = e.target.closest('.msg');
   if (!el || el.classList.contains('typing')) return;
   if (e.target.closest('.reaction-pill') || e.target.closest('.mention-preview') ||
@@ -2132,6 +2593,7 @@ function showMsgMenu(el) {
     items += `<div class="sheet-item" data-mact="react">${icon('smile')}واکنش</div>`;
   }
   if (m.type === 'text' && !m.deleted) items += `<div class="sheet-item" data-mact="copy">${icon('copy')}کپی</div>`;
+  if (m.mediaId && !m.deleted) items += `<div class="sheet-item" data-mact="download">${icon('save')}ذخیره در دستگاه</div>`;
   if (m.out && m.type === 'text' && !m.deleted) items += `<div class="sheet-item" data-mact="edit">${icon('edit')}ویرایش</div>`;
   if (!m.deleted && chat.type !== 'saved') items += `<div class="sheet-item" data-mact="save">${icon('bookmark')}ذخیره</div>`;
   items += `<div class="sheet-item" data-mact="forward">${icon('forward')}هدایت</div>`;
@@ -2172,7 +2634,7 @@ function saveToSaved(chat, m) {
   }
   saved.messages.push({
     id:rid(), text:m.text, out:true, ts:Date.now(), status:'sent', type:m.type, replyTo:null,
-    dur:m.dur, bg:m.bg, size:m.size, dataUrl:m.dataUrl, savedFrom:chat.name, originalSender:m.sender||null, poll:m.poll,
+    dur:m.dur, bg:m.bg, size:m.size, dataUrl:m.dataUrl, ...mediaFields(m), savedFrom:chat.name, originalSender:m.sender||null, poll:m.poll,
     reactions:{}, deleted:false, editedForAll:false, seenCount:0, seenTarget:0, linkPreview:m.linkPreview||null, _fakeReactionCounts:{}
   });
   save(); renderChatList(); toast('ذخیره شد ✓', 'success');
@@ -2188,6 +2650,7 @@ function handleMsgAction(act, chat, m) {
     toast(m.pinned ? 'پیام سنجاق شد' : 'سنجاق برداشته شد', 'info');
     return;
   }
+  if (act === 'download') { downloadMedia(m); return; }
   if (act === 'copy') { copyClip(m.text||'').then(()=>toast('کپی شد', 'success'), ()=>toast('کپی نشد', 'error')); return; }
   if (act === 'edit') {
     showPrompt('ویرایش پیام', m.text, val => {
@@ -2204,7 +2667,7 @@ function handleMsgAction(act, chat, m) {
     $$('#sheet-content [data-fwd]').forEach(b => b.addEventListener('click', () => {
       const t = getChat(b.dataset.fwd);
       if (t && isWarnerChat(t)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; }
-      t.messages.push({ id:rid(), text:m.text, out:true, ts:Date.now(), status:'sent', type:m.type, replyTo:null, dur:m.dur, bg:m.bg, size:m.size, dataUrl:m.dataUrl, forwarded:true, originalSender:m.sender||null, poll:m.poll, reactions:{}, deleted:false, editedForAll:false, seenCount:0, seenTarget:0, linkPreview:m.linkPreview||null, _fakeReactionCounts:{} });
+      t.messages.push({ id:rid(), text:m.text, out:true, ts:Date.now(), status:'sent', type:m.type, replyTo:null, dur:m.dur, bg:m.bg, size:m.size, dataUrl:m.dataUrl, ...mediaFields(m), forwarded:true, originalSender:m.sender||null, poll:m.poll, reactions:{}, deleted:false, editedForAll:false, seenCount:0, seenTarget:0, linkPreview:m.linkPreview||null, _fakeReactionCounts:{} });
       closeSheet(); renderChatList(); save(); toast('هدایت شد', 'success');
     })); return;
   }
@@ -2220,7 +2683,7 @@ function handleMsgAction(act, chat, m) {
   if (act === 'ban') { banUser(chat.id); return; }
   if (act === 'delete-all') {
     showConfirm('حذف برای همه', 'این پیام برای همه حذف شود؟', () => {
-      m.deleted = true; m.pinned = false; m.text = ''; m.dataUrl = null; m.linkPreview = null;
+      m.deleted = true; m.pinned = false; m.text = ''; m.dataUrl = null; m.mediaId = null; m.thumbId = null; m.comments = []; m.linkPreview = null;
       m.reactions = {}; m._fakeReactionCounts = {};
       renderMessages(false); renderChatList(); save(); toast('حذف شد', 'success');
     }); return;
@@ -2502,7 +2965,7 @@ emojiOverlay.addEventListener('click', e => { if (e.target === emojiOverlay) emo
 const _btnPhoto = $('#btn-photo');
 if (_btnPhoto) _btnPhoto.addEventListener('click', () => pickPhotoForMessage());
 const _btnFile = $('#btn-file');
-if (_btnFile) _btnFile.addEventListener('click', () => { sendMessage({type:'file', text:'document.pdf', size:'1.8 MB'}, ''); });
+if (_btnFile) _btnFile.addEventListener('click', () => pickMedia(''));
 const _btnPoll = $('#btn-poll');
 if (_btnPoll) _btnPoll.addEventListener('click', () => {
   $('#poll-q-input').value = '';
@@ -2537,20 +3000,7 @@ if (_btnEmoji) _btnEmoji.addEventListener('click', openEmoji);
 const _btnSend = $('#btn-send');
 if (_btnSend) _btnSend.addEventListener('click', e => { e.preventDefault(); if (recActive) stopRec(false); else startRec(); });
 
-function pickPhotoForMessage() {
-  { const _c = getChat(activeChatId); if (_c && isWarnerChat(_c)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return; } }
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = 'image/*,video/*';
-  inp.onchange = () => {
-    const f = inp.files[0]; if (!f) return;
-    if (f.type.startsWith('video/')) {
-      sendMessage({type:'file', text:f.name || 'video.mp4', size:fmtBytes(f.size)}, '');
-      return;
-    }
-    resizeImage(f, 1080, url => { sendMessage({type:'photo', text:'', dataUrl:url, size:fmtBytes(f.size)}, ''); });
-  };
-  inp.click();
-}
+function pickPhotoForMessage() { pickMedia('image/*,video/*'); }
 
 /* ---------- chat menu (3-line in chat header) ---------- */
 $('#btn-chat-menu').addEventListener('click', () => {
@@ -2559,6 +3009,7 @@ $('#btn-chat-menu').addEventListener('click', () => {
   const memberItem = (c.type === 'group' || c.type === 'channel') ? `<div class="sheet-item" data-cact="members">${icon('users')}تعداد اعضا (${(c.members||0).toLocaleString('fa-IR')})</div>` : '';
   const coverItem = (c.type === 'group' || c.type === 'channel') ? `<div class="sheet-item" data-cact="cover">${icon('image')}${c.coverPhoto?'تغییر کاور':'افزودن کاور'}</div>` : '';
   const descItem = (c.type === 'group' || c.type === 'channel') ? `<div class="sheet-item" data-cact="desc">${icon('file')}${c.description?'ویرایش توضیحات':'افزودن توضیحات'}</div>` : '';
+  const chOpts = c.type === 'channel' ? `<div class="sheet-item" data-cact="toggle-comments">${icon('chat-outline')}${c.commentsEnabled ? 'غیرفعال کردن کامنت‌ها' : 'فعال کردن کامنت‌ها'}</div><div class="sheet-item" data-cact="toggle-sign">${icon('edit')}${c.signMessages ? 'خاموش کردن امضای پیام‌ها' : 'روشن کردن امضای پیام‌ها'}</div>` : '';
   const warnBtn = (c.type !== 'ai' && c.type !== 'saved') ? `<div class="sheet-item" data-cact="warn" style="color:#f59e0b">${icon('alert')}ارسال اخطار</div>` : '';
   const setWarnerBtn = (c.type !== 'ai' && c.type !== 'saved') ? `<div class="sheet-item" data-cact="set-warner">${icon('user')}تنظیم به عنوان اخطار دهنده</div>` : '';
   const banBtn = (c.type !== 'ai' && c.type !== 'saved') ? `<div class="sheet-item danger" data-cact="ban">${icon('ban')}بن کردن</div>` : '';
@@ -2568,7 +3019,7 @@ $('#btn-chat-menu').addEventListener('click', () => {
     <div class="sheet-item" data-cact="info">${icon('user')}اطلاعات چت</div>
     <div class="sheet-item" data-cact="avatar">${icon('image')}تنظیم پروفایل</div>
     <div class="sheet-item" data-cact="wallpaper">${icon('image')}تغییر پس‌زمینه چت</div>
-    ${coverItem}${descItem}
+    ${coverItem}${descItem}${chOpts}
     <div class="sheet-item" data-cact="verified">${icon('verified')}تغییر نشان تایید</div>
     <div class="sheet-item" data-cact="rename">${icon('edit')}تغییر نام</div>
     ${memberItem}
@@ -2609,6 +3060,8 @@ $('#btn-chat-menu').addEventListener('click', () => {
       if (act === 'members') { showPrompt('تعداد اعضا', String(c.members||0), v => { const n = parseInt(v, 10); if (isNaN(n) || n < 0) { toast('عدد معتبر', 'error'); return; } c.members = Math.min(n, 9999999); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
       if (act === 'pin') { c.pinned = !c.pinned; toast(c.pinned?'سنجاق':'برداشته شد', 'info'); }
       if (act === 'mute') { c.muted = !c.muted; toast(c.muted?'بی‌صدا':'فعال', 'info'); }
+      if (act === 'toggle-comments') { c.commentsEnabled = !c.commentsEnabled; toast(c.commentsEnabled ? 'کامنت‌ها فعال شد' : 'کامنت‌ها غیرفعال شد', 'info'); }
+      if (act === 'toggle-sign') { c.signMessages = !c.signMessages; if (c.signMessages) c.signSince = Date.now(); toast(c.signMessages ? 'امضای پیام‌ها روشن شد' : 'امضای پیام‌ها خاموش شد', 'info'); }
       if (act === 'clear') { c.messages = []; toast('پاک شد', 'success'); }
       if (act === 'delete') {
         showConfirm('حذف', 'کل چت حذف شود؟', () => {
@@ -2849,7 +3302,7 @@ function finishCreate(data, type) {
 function createChat(data) {
   const chat = Object.assign({
     id:rid(), unread:0, pinned:false, muted:false, draft:'', messages:[], createdAt:Date.now(),
-    description:'', coverPhoto:null, admins:[], permissions:{sendMessages:'all',editInfo:'all'}, joined:true, warner:'',
+    description:'', coverPhoto:null, admins:[], permissions:{sendMessages:'all',editInfo:'all'}, joined:true, warner:'', commentsEnabled:false, signMessages:false, signSince:0,
     joinedDate: getPersianDate(),
     owner: null
   }, data);
@@ -2966,6 +3419,7 @@ $('#settings-body').addEventListener('click', e => {
     if (act === 'reset') {
       showConfirm('پاک کردن همه', 'تمام داده‌ها حذف شوند؟', () => {
         localStorage.removeItem(KEY); localStorage.removeItem(BACKUP_KEY);
+        resetMediaEls(); stopVoice(); wipeMedia();
         state = emptyState(); applyTheme();
         renderChatList(); renderSettings(); renderContacts(); toast('پاک شد', 'info');
       });
@@ -3164,6 +3618,196 @@ if (scrollBottomBtn) scrollBottomBtn.addEventListener('click', () => {
   messagesBox.scrollTo({top:messagesBox.scrollHeight, behavior:'smooth'});
   if (scrollUnread) scrollUnread.style.display = 'none';
 });
+
+
+/* ---------- کامنت زیر پست‌های کانال ---------- */
+let cmtCtx = null;
+function cmtFind() {
+  if (!cmtCtx) return null;
+  const chat = getChat(cmtCtx.chatId);
+  const m = chat && chat.messages.find(x => x.id === cmtCtx.msgId);
+  return m ? { chat, m } : null;
+}
+function openComments(chatId, msgId) {
+  const chat = getChat(chatId);
+  if (!chat || !chat.commentsEnabled) { toast('کامنت‌ها برای این کانال غیرفعال است', 'info'); return; }
+  cmtCtx = { chatId, msgId };
+  const f = cmtFind();
+  if (!f) { cmtCtx = null; return; }
+  $('#comments-sheet').innerHTML = `
+    <div class="cmt-head"><div class="cmt-htxt"><div class="cmt-title" id="cmt-title"></div><div class="cmt-sub" id="cmt-sub"></div></div><button class="icon-btn" id="cmt-close" aria-label="بستن">${icon('close', 20)}</button></div>
+    <div class="cmt-post" id="cmt-post"></div>
+    <div class="cmt-list" id="cmt-list"></div>
+    <div class="cmt-compose">
+      <textarea id="cmt-input" rows="1" maxlength="1000" placeholder="نظر خود را بنویسید…"></textarea>
+      <button class="cmt-send" id="cmt-send" aria-label="ارسال نظر">${icon('send', 18)}</button>
+    </div>`;
+  $('#cmt-post').textContent = pinPreview(f.m) || 'پست';
+  renderCommentList(true);
+  $('#comments-overlay').classList.add('show');
+  if (!(f.m.comments || []).length) simAIComments(f.chat, f.m, 2 + Math.floor(Math.random() * 3));
+}
+function closeComments() {
+  $('#comments-overlay').classList.remove('show');
+  const inp = $('#cmt-input'); if (inp) inp.blur();
+  cmtCtx = null; cmtTyping = null;
+  if (activeChatId) renderMessages(false);
+}
+function cmtAvatar(c) {
+  const mem = MEMBER_POOL.find(x => x.name === c.author);
+  const av = c.avatar || (mem && mem.avatar);
+  return (av && av.type === 'emoji') ? av.value : initials(c.author);
+}
+function renderCommentList(scrollEnd) {
+  const f = cmtFind();
+  if (!f) return;
+  const list = f.m.comments || (f.m.comments = []);
+  const typing = cmtTyping && cmtTyping.msgId === f.m.id ? cmtTyping.name : null;
+  $('#cmt-title').textContent = f.chat.name;
+  $('#cmt-sub').textContent = typing ? `${typing} در حال تایپ…` : (list.length ? `${fmtNum(list.length)} نظر` : 'بدون نظر');
+  $('#cmt-sub').classList.toggle('typing', !!typing);
+  const box = $('#cmt-list');
+  if (!list.length) {
+    box.innerHTML = `<div class="cmt-empty">${icon('chat-outline', 42)}<div>هنوز نظری ثبت نشده</div><small>اولین نظر را شما بنویسید</small></div>`;
+    return;
+  }
+  const nearEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+  box.innerHTML = list.map((c, i) => {
+    const prev = list[i - 1], next = list[i + 1];
+    const mine = c.uid === state.me.id && !c.ai;
+    const time = `<div class="meta"><span>${fmtTime(c.ts)}</span>${mine ? `<span class="cmt-del" data-cdel="${esc(c.id)}">${icon('trash', 12)}</span>` : ''}</div>`;
+    if (mine) return `<div class="msg out no-anim" data-cid="${esc(c.id)}"><div class="btext">${esc(c.text)}</div>${time}</div>`;
+    const sameBefore = prev && prev.author === c.author && !(prev.uid === state.me.id && !prev.ai);
+    const sameAfter = next && next.author === c.author && !(next.uid === state.me.id && !next.ai);
+    const [c1, c2] = nameColors(c.author);
+    return `<div class="msg-group-row">
+      <div class="msg-group-av${sameAfter ? ' empty' : ''}" style="background:linear-gradient(135deg,${c1},${c2})">${sameAfter ? '' : esc(cmtAvatar(c))}</div>
+      <div class="msg-group-wrap">
+        ${!sameBefore ? `<div class="msg-group-sender" style="color:${c1}">${esc(c.author)}</div>` : ''}
+        <div class="msg in no-anim" data-cid="${esc(c.id)}"><div class="btext">${esc(c.text)}</div>${time}</div>
+      </div>
+    </div>`;
+  }).join('');
+  if (typing) box.insertAdjacentHTML('beforeend', `<div class="cmt-typing"><span></span><span></span><span></span></div>`);
+  if (scrollEnd || nearEnd) box.scrollTop = box.scrollHeight;
+}
+
+/* ---------- نظرهای هوشمند (AI) ---------- */
+let cmtTyping = null;
+const aiCmtBusy = new Set(), aiCmtReplyBusy = new Set();
+function pushAIComment(chat, m, member, text) {
+  (m.comments || (m.comments = [])).push({ id: rid(), text, author: member.name, avatar: member.avatar, uid: null, ai: true, ts: Date.now() });
+  save();
+  if (activeChatId === chat.id) renderMessages(false);
+  if (cmtCtx && cmtCtx.msgId === m.id) renderCommentList(false);
+}
+function commentSystemPrompt(chat, m, member) {
+  return `تو «${member.name}» هستی، یکی از اعضای کانال «${chat.name}» که زیر یک پست نظر می‌نویسه. فقط خودِ نظرت رو بنویس، کوتاه (حداکثر ۲ خط)، فارسی خودمونی و طبیعی. اسم خودت یا توضیح اضافه ننویس.`;
+}
+async function aiComment(chat, m, userMsg) {
+  const hist = (m.comments || []).slice(-6).map(c => ({ out: c.uid === state.me.id && !c.ai, text: c.text, sender: c.author }));
+  const post = pinPreview(m) || 'یک پست';
+  const member = MEMBER_POOL[Math.floor(Math.random() * MEMBER_POOL.length)];
+  const lastNames = (m.comments || []).slice(-2).map(c => c.author);
+  const pool = MEMBER_POOL.filter(x => !lastNames.includes(x.name));
+  const who = pool[Math.floor(Math.random() * pool.length)] || member;
+  let reply = null;
+  if (state.settings.aiMode && navigator.onLine) {
+    reply = await fetchAI(userMsg || ('پست کانال: ' + post), hist, commentSystemPrompt(chat, m, who));
+    if (reply) reply = reply.replace(/^[«"]?[^:\n]{1,12}[:：]\s*/, '').trim().slice(0, 300);
+  }
+  if (!reply) reply = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+  return { who, reply };
+}
+/* بعد از انتشار پست: چند نظر خودکار با فاصله‌ی زمانی */
+async function simAIComments(chat, m, count) {
+  if (aiCmtBusy.has(m.id)) return;
+  aiCmtBusy.add(m.id);
+  try {
+    for (let i = 0; i < count; i++) {
+      await new Promise(r => setTimeout(r, 3000 + Math.random() * 9000));
+      const c = getChat(chat.id);
+      if (!c || !c.commentsEnabled || !c.messages.includes(m) || m.deleted) break;
+      const r = await aiComment(c, m);
+      pushAIComment(c, m, r.who, r.reply);
+      if (state.settings.sounds && activeChatId !== c.id) beep();
+    }
+  } finally { aiCmtBusy.delete(m.id); }
+}
+/* وقتی کاربر نظر می‌نویسه، اعضا مثل گروه جواب می‌دن */
+async function aiReplyToComment(chat, m, userText) {
+  if (aiCmtReplyBusy.has(m.id)) return;
+  aiCmtReplyBusy.add(m.id);
+  try {
+    const n = Math.random() > 0.55 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      await new Promise(r => setTimeout(r, 900 + Math.random() * 900));
+      const c = getChat(chat.id);
+      if (!c || !c.commentsEnabled || !c.messages.includes(m) || m.deleted) break;
+      const pick = MEMBER_POOL[Math.floor(Math.random() * MEMBER_POOL.length)];
+      cmtTyping = { msgId: m.id, name: pick.name };
+      if (cmtCtx && cmtCtx.msgId === m.id) renderCommentList(true);
+      const hist = (m.comments || []).slice(-6).map(x => ({ out: x.uid === state.me.id && !x.ai, text: x.text, sender: x.author }));
+      let reply = null;
+      if (state.settings.aiMode && navigator.onLine) {
+        reply = await fetchAI(userText, hist, commentSystemPrompt(c, m, pick) + ' پست: ' + (pinPreview(m) || ''));
+        if (reply) reply = reply.replace(/^[«"]?[^:\n]{1,12}[:：]\s*/, '').trim().slice(0, 300);
+      } else await new Promise(r => setTimeout(r, 1200));
+      if (!reply) reply = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+      cmtTyping = null;
+      pushAIComment(c, m, pick, reply);
+      if (i < n - 1) await new Promise(r => setTimeout(r, 1200 + Math.random() * 1500));
+    }
+  } finally { cmtTyping = null; aiCmtReplyBusy.delete(m.id); if (cmtCtx && cmtCtx.msgId === m.id) renderCommentList(false); }
+}
+function sendComment() {
+  const f = cmtFind();
+  if (!f) return;
+  const inp = $('#cmt-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  if (!f.chat.commentsEnabled) { toast('کامنت‌ها غیرفعال شده است', 'error'); return; }
+  (f.m.comments || (f.m.comments = [])).push({ id: rid(), text, author: state.me.name, username: state.me.username || '', uid: state.me.id, ts: Date.now() });
+  inp.value = ''; inp.style.height = 'auto';
+  save(); renderCommentList(true);
+  aiReplyToComment(f.chat, f.m, text);
+}
+(function bindCommentsUI() {
+  const ov = $('#comments-overlay');
+  if (!ov) return;
+  ov.addEventListener('click', e => {
+    if (e.target === ov || e.target.closest('#cmt-close')) { closeComments(); return; }
+    if (e.target.closest('#cmt-send')) { sendComment(); return; }
+    const del = e.target.closest('[data-cdel]');
+    if (del) {
+      const f = cmtFind(); if (!f) return;
+      showConfirm('حذف نظر', 'این نظر حذف شود؟', () => {
+        f.m.comments = (f.m.comments || []).filter(c => c.id !== del.dataset.cdel);
+        save(); renderCommentList(false); toast('نظر حذف شد', 'success');
+      });
+    }
+  });
+  ov.addEventListener('pointerdown', e => { if (e.target.closest('#cmt-send')) e.preventDefault(); });
+  ov.addEventListener('input', e => {
+    if (e.target.id !== 'cmt-input') return;
+    e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 110) + 'px';
+  });
+  ov.addEventListener('keydown', e => {
+    if (e.target.id === 'cmt-input' && e.key === 'Enter' && !e.shiftKey && innerWidth > 820) { e.preventDefault(); sendComment(); }
+  });
+  const vw = $('#viewer-overlay');
+  if (vw) vw.addEventListener('click', e => {
+    if (e.target.closest('.vw-dl')) {
+      const chat = getChat(activeChatId), m = chat && chat.messages.find(x => x.id === vw.dataset.msg);
+      if (m && m.mediaId) downloadMedia(m);
+      return;
+    }
+    if (e.target.tagName !== 'IMG') closeViewer();
+  });
+  addEventListener('keydown', e => { if (e.key === 'Escape') { closeViewer(); if (cmtCtx) closeComments(); } });
+})();
+
+setTimeout(() => { gcMedia().catch(() => {}); }, 6000);
 
 /* ---------- INIT ---------- */
 state.chats.forEach(c => c.messages.forEach(m => renderedIds.add(m.id)));
