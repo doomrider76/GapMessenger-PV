@@ -26,16 +26,6 @@ const setVP = () => {
   document.documentElement.style.setProperty('--vw', innerWidth * .01 + 'px');
 };
 setVP(); addEventListener('resize', setVP);
-/* فول‌اسکرین روی اندروید/سامسونگ وقتی داخل مرورگر باز می‌شود (iOS این API را ندارد؛ آنجا از «افزودن به صفحه اصلی» استفاده کن) */
-(function(){
-  const standalone = matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-  if (standalone) return;
-  const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (!req) return;
-  const go = () => { try { const r = req.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(()=>{}); } catch {} };
-  addEventListener('pointerup', function once(){ removeEventListener('pointerup', once); go(); }, { once: true });
-})();
 addEventListener('orientationchange', () => setTimeout(setVP, 200));
 if (window.visualViewport) {
   const vv = visualViewport;
