@@ -1203,3 +1203,59 @@ html[data-theme="light"] .msg code.mc{background:rgba(0,0,0,.08)}
 /* ---------- باکس نقل قول: هم‌سبک باکس‌های برنامه، با خط کناری هم‌رنگ اسم کانال ---------- */
 .msg blockquote.mq,.msg.out blockquote.mq{display:block;margin:12px 0 6px;padding:8px 12px 8px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-right:3px solid var(--qc,#6c6c6e);border-radius:12px;font-size:14px;line-height:1.6;}
 html[data-theme="light"] .msg blockquote.mq,html[data-theme="light"] .msg.out blockquote.mq{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);border-right-color:var(--qc,#6c6c6e);}
+
+
+/* ---------- تنظیم دقیق باکس نقل قول و ردیف ساعت/بازدید ---------- */
+.msg blockquote.mq,.msg.out blockquote.mq{position:relative;margin:16px 0 1px;padding:9px 20px 9px 10px;border-right:1px solid rgba(255,255,255,.08);}
+html[data-theme="light"] .msg blockquote.mq,html[data-theme="light"] .msg.out blockquote.mq{border-right:1px solid rgba(0,0,0,.08);}
+.msg blockquote.mq::before{content:"";position:absolute;right:8px;top:50%;transform:translateY(-50%);width:3px;height:calc(100% - 18px);min-height:14px;border-radius:2px;background:var(--qc,#6c6c6e);}
+.meta{padding-left:0;margin-left:-5px;}
+
+
+/* ---------- نوار قالب‌بندی: درست بالای کادر تایپ، با فاصله‌ی نیم‌پیکسل ---------- */
+.composer-input-wrap{position:relative}
+.composer-input-wrap .fmt-bar{bottom:calc(100% + .5px);right:10px;}
+
+
+/* ---------- نوار قالب‌بندی: دقیقاً هم‌دیزاین کادر تایپ، با فاصله‌ی ۱ پیکسل ---------- */
+.composer-input-wrap .fmt-bar{
+  bottom:calc(100% + 1px);right:0;gap:2px;padding:5px 8px;
+  background:rgba(24,24,24,.2);
+  backdrop-filter:blur(25px) saturate(180%);-webkit-backdrop-filter:blur(25px) saturate(180%);
+  border:none;border-top:1px solid rgba(255,255,255,.15);border-bottom:1px solid rgba(255,255,255,.15);
+  border-radius:26px;box-sizing:border-box;
+}
+.composer-input-wrap .fmt-bar button{height:32px;min-width:36px;border-radius:50%;background:transparent;}
+.composer-input-wrap .fmt-bar button:active{background:rgba(255,255,255,.14)}
+html[data-theme="light"] .composer-input-wrap .fmt-bar{background:rgba(120,120,128,.14);border-top-color:rgba(0,0,0,.07);border-bottom-color:rgba(0,0,0,.07);}
+html[data-theme="light"] .composer-input-wrap .fmt-bar button:active{background:rgba(120,120,128,.32)}
+
+/* ---------- باکس نقل قول: فاصله‌ها ---------- */
+.msg blockquote.mq,.msg.out blockquote.mq{margin-bottom:1.5px;}
+.msg .btext>blockquote.mq:first-child{margin-top:3px;}
+
+
+/* ---------- فایل‌های آماده‌ی ارسال (کپشن در کادر تایپ) ---------- */
+.attach-bar{display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--bg);border-top:1px solid var(--line-2);position:absolute;bottom:var(--composer-h);left:0;right:0;z-index:14;}
+.attach-bar.show{display:flex}
+.attach-bar .ab-list{display:flex;gap:8px;overflow-x:auto;max-width:60%;flex-shrink:0;-webkit-overflow-scrolling:touch;padding:3px 0;}
+.ab-th{position:relative;flex:0 0 auto;width:46px;height:46px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;font-size:20px;}
+.ab-th img{width:100%;height:100%;object-fit:cover;display:block;border-radius:11px}
+.ab-x{position:absolute;top:-5px;left:-5px;width:18px;height:18px;border-radius:50%;background:#3a3a3c;color:#fff;font-size:13px;line-height:16px;text-align:center;padding:0;border:1px solid rgba(255,255,255,.2);}
+.attach-bar .ab-hint{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.attach-bar .ab-hint small{display:block;font-size:11.5px;font-weight:500;color:var(--text-3);margin-top:2px}
+
+
+/* ---------- فایل‌های انتخاب‌شده: کوچک، داخل خود کادر تایپ ---------- */
+.composer-input-wrap .attach-bar{display:none;position:static;bottom:auto;left:auto;right:auto;padding:0;gap:4px;background:transparent;border:none;align-items:center;align-self:center;flex-shrink:0;z-index:auto;}
+.composer-input-wrap .attach-bar.show{display:flex}
+.composer-input-wrap .ab-th{width:32px;height:32px;border-radius:10px;font-size:16px;flex:0 0 auto;border:1px solid rgba(255,255,255,.15);}
+.composer-input-wrap .ab-th img{border-radius:9px}
+.composer-input-wrap .ab-th.more{font-size:12px;font-weight:700;color:var(--text-2)}
+html[data-theme="light"] .composer-input-wrap .ab-th{border-color:rgba(0,0,0,.1)}
+
+
+/* ---------- وسط‌چین عمودی متن/کپشن/پیام «امکان ارسال…» داخل کادر تایپ ---------- */
+.composer-input-wrap{align-items:center;}
+.composer-input-wrap .composer-text-send{align-self:flex-end;}
+#msg-input{align-self:center;margin:0;}
