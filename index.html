@@ -177,6 +177,13 @@
         <svg width="20" height="20"><use href="#i-mic"/></svg>
       </button>
       <div class="composer-input-area">
+        <div class="fmt-bar" id="fmt-bar">
+          <button type="button" data-fmt="bold" aria-label="بولد"><b>B</b></button>
+          <button type="button" data-fmt="italic" aria-label="ایتالیک"><i>I</i></button>
+          <button type="button" data-fmt="strike" aria-label="خط‌خورده"><s>S</s></button>
+          <button type="button" data-fmt="code" aria-label="کد">&lt;/&gt;</button>
+          <button type="button" data-fmt="quote" aria-label="نقل قول">❝</button>
+        </div>
         <div class="composer-mini-actions">
           <button class="composer-mini" id="btn-photo" aria-label="ارسال عکس و فیلم">
             <svg width="15" height="15"><use href="#i-camera"/></svg>
@@ -294,8 +301,20 @@
   </div>
 </div>
 
+<div class="modal" id="cap-modal">
+  <div class="modal-box cap-box">
+    <h3 id="cap-title">ارسال فایل</h3>
+    <div class="cap-preview" id="cap-preview"></div>
+    <textarea id="cap-input" rows="2" maxlength="1024" placeholder="افزودن کپشن…"></textarea>
+    <div class="modal-actions">
+      <button id="cap-cancel">لغو</button>
+      <button id="cap-send" class="ok">ارسال</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
-<script src="script.js?v=media1" defer></script>
+<script src="script.js?v=media3" defer></script>
 </body>
 </html>
