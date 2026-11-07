@@ -1259,3 +1259,34 @@ html[data-theme="light"] .composer-input-wrap .ab-th{border-color:rgba(0,0,0,.1)
 .composer-input-wrap{align-items:center;}
 .composer-input-wrap .composer-text-send{align-self:flex-end;}
 #msg-input{align-self:center;margin:0;}
+
+
+/* ---------- حذف فایل انتخاب‌شده (ضربه روی بندانگشتی) و آلبوم ---------- */
+.composer-input-wrap .ab-th{position:relative;cursor:pointer;overflow:visible}
+.composer-input-wrap .ab-th:not(.more)::after{content:"×";position:absolute;top:-5px;left:-5px;width:15px;height:15px;border-radius:50%;background:#3a3a3c;color:#fff;font-size:11px;line-height:14px;text-align:center;border:1px solid rgba(255,255,255,.25);pointer-events:none;}
+html[data-theme="light"] .composer-input-wrap .ab-th:not(.more)::after{background:#8e8e93}
+.album-grid{display:grid;gap:3px;margin:-3px -8px 3px;width:min(300px,64vw);border-radius:14px;overflow:hidden;}
+.album-grid.multi{grid-template-columns:1fr 1fr;}
+.album-grid .mbox{width:100%;margin:0;border-radius:0;max-height:none;}
+.album-grid.multi .mbox{aspect-ratio:1 !important;}
+.album-grid ~ .audiobox,.album-grid ~ .filemsg,.audiobox + .filemsg,.audiobox + .audiobox,.filemsg + .filemsg,.filemsg + .audiobox{margin-top:6px;}
+
+
+/* ---------- حباب پیام هم‌اندازه‌ی ویدیو/عکس (کپشن و ریکشن حباب رو پهن نمی‌کنن) ---------- */
+.msg:has(> .mbox) > *:not(.mbox):not(.meta):not(.album-grid),
+.msg:has(> .album-grid) > *:not(.mbox):not(.meta):not(.album-grid){width:0;min-width:100%;}
+.mbox{margin:-3px -13px 3px;border-radius:16px;}
+.album-grid{margin:-3px -13px 3px;border-radius:16px;}
+.album-grid .mbox{margin:0;border-radius:0;}
+
+
+/* ---------- اصلاح: خط دکمه‌ی نظر بالا نره بهم؛ عکس/ویدیو بدون گوشه‌ی گرد ---------- */
+.msg:has(> .mbox) > *:not(.mbox):not(.meta):not(.album-grid):not(.cmt-btn),
+.msg:has(> .album-grid) > *:not(.mbox):not(.meta):not(.album-grid):not(.cmt-btn){width:0;min-width:100%;}
+.msg:has(> .mbox) > .cmt-btn,.msg:has(> .album-grid) > .cmt-btn{width:auto !important;min-width:0 !important;}
+.mbox,.album-grid,.album-grid .mbox{border-radius:0;}
+/* light theme: html + notification overlay use exactly the app background */
+html[data-theme="light"]{background-color:#ffffff;}
+html[data-theme="light"] .update-overlay{background:#ffffff !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}
+html[data-theme="light"] .update-box{background:#ffffff !important;}
+html[data-theme="light"] .update-ok{background:#1c1c1e;color:#fff;border-color:rgba(0,0,0,.1);}
