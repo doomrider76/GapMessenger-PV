@@ -204,6 +204,9 @@ function applyTheme() {
   const cs = document.querySelector('meta[name="color-scheme"]');
   if (cs) cs.content = isLight ? 'light' : 'dark';
   document.documentElement.style.backgroundColor = bgColor;
+  let asb = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (!asb) { asb = document.createElement('meta'); asb.name = 'apple-mobile-web-app-status-bar-style'; document.head.appendChild(asb); }
+  asb.content = isLight ? 'default' : 'black';
   if (document.body) document.body.style.backgroundColor = bgColor;
   try { if (typeof activeChatId !== 'undefined' && activeChatId) applyWallpaper(getChat(activeChatId)); } catch {}
 }
@@ -1404,6 +1407,20 @@ function albumItemHTML(it, id) {
   if (it.type === 'audio') return `<div class="audiobox"><div class="abox-name">🎵 <span>${esc(it.fname || 'فایل صوتی')}</span></div><div class="abox-slot" data-slot="${esc(id)}" data-kind="audio"></div></div>`;
   return `<div class="filemsg dl" data-dl="${esc(id)}"><div class="ficon">${icon('arrow-down',22)}</div><div class="fmeta"><span class="fname">${esc(it.text || it.fname || 'file')}</span><span class="fsize">${esc(it.size || '')}</span></div></div>`;
 }
+/* تعداد نظرها بر اساس بازدید و ریکشن پست (بدون ساختن هزاران پیام واقعی) */
+function cmtTotal(m) {
+  const real = (m.comments || []).length;
+  const views = m.seenCount || 0;
+  let reacts = 0;
+  const rr = m.reactions || {}, fr = m._fakeReactionCounts || {};
+  Object.keys(rr).forEach(k => reacts += (rr[k] || []).length);
+  Object.keys(fr).forEach(k => reacts += (fr[k] || 0));
+  let h = 0; const id = String(m.id || '');
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const jitter = 0.85 + (h % 31) / 100; /* 0.85 تا 1.15، برای هر پست ثابت */
+  const virtual = Math.round((views * 0.05 + reacts * 0.4) * jitter);
+  return virtual + real;
+}
 function renderReactions(m) {
   const real = m.reactions || {};
   const fake = m._fakeReactionCounts || {};
@@ -1601,7 +1618,7 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
   const pinMark = (m.pinned && !m.deleted) ? `<span class="meta-pin">${icon('pin',11)}</span>` : '';
   const signOn = chat.type === 'channel' && chat.signMessages && m.ts >= (chat.signSince || 0) && !m.deleted && m.type !== 'warning';
   const authorHtml = signOn ? `<span class="meta-author">${esc(m.author || (m.out ? state.me.name : chat.name))}</span><span class="meta-dot">·</span>` : '';
-  const cmtCount = (m.comments || []).length;
+  const cmtCount = cmtTotal(m);
   const cmtBtn = (chat.type === 'channel' && chat.commentsEnabled && !m.deleted && m.type !== 'warning')
     ? `<div class="cmt-btn" data-cmt="${esc(m.id)}">${icon('chat-outline',17)}<span>${cmtCount ? fmtNum(cmtCount) + ' نظر' : 'ارسال نظر'}</span><span class="cmt-chev">${icon('chevron',16)}</span></div>` : '';
   const msgInner = `${inner}<div class="meta">${pinMark}${authorHtml}<span>${metaText}</span>${seen}${ticks}</div>${cmtBtn}`;
@@ -3897,7 +3914,7 @@ function renderCommentList(scrollEnd) {
   const list = f.m.comments || (f.m.comments = []);
   const typing = cmtTyping && cmtTyping.msgId === f.m.id ? cmtTyping.name : null;
   $('#cmt-title').textContent = f.chat.name;
-  $('#cmt-sub').textContent = typing ? `${typing} در حال تایپ…` : (list.length ? `${fmtNum(list.length)} نظر` : 'بدون نظر');
+  $('#cmt-sub').textContent = typing ? `${typing} در حال تایپ…` : (cmtTotal(f.m) ? `${fmtNum(cmtTotal(f.m))} نظر` : 'بدون نظر');
   $('#cmt-sub').classList.toggle('typing', !!typing);
   const box = $('#cmt-list');
   if (!list.length) {
