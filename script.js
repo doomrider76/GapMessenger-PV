@@ -477,31 +477,48 @@ function pickMedia(accept) {
   inp.style.display = 'none';
   document.body.appendChild(inp);
   const cleanup = () => setTimeout(() => inp.remove(), 1500);
-  inp.onchange = () => { const files = [...inp.files]; cleanup(); if (files.length) openCaptionModal(files, chatId); };
+  inp.onchange = () => { const files = [...inp.files]; cleanup(); if (files.length) stageFiles(files, chatId); };
   inp.oncancel = cleanup;
   inp.click();
 }
-/* ---------- پیش‌نمایش و کپشن قبل از ارسال ---------- */
-function openCaptionModal(files, chatId) {
-  const modal = $('#cap-modal');
-  if (!modal) { sendPickedFiles(files, chatId); return; }
-  const list = [...files];
-  if (list.length > 10) { toast('حداکثر ۱۰ فایل در هر بار', 'error'); list.length = 10; }
-  const urls = [];
-  $('#cap-title').textContent = list.length > 1 ? list.length.toLocaleString('fa-IR') + ' فایل' : 'ارسال فایل';
-  $('#cap-preview').innerHTML = list.map(f => {
+/* ---------- فایل‌های آماده‌ی ارسال: کپشن در همان کادر تایپ نوشته می‌شود ---------- */
+let pendingFiles = [], pendingChatId = null, pendingUrls = [];
+function layoutAttachBar() {}
+function renderAttachBar() {
+  const ab = $('#attach-bar'); if (!ab) return;
+  pendingUrls.forEach(u => URL.revokeObjectURL(u)); pendingUrls = [];
+  if (!pendingFiles.length) { ab.classList.remove('show'); ab.innerHTML = ''; if (inputEl) inputEl.placeholder = 'پیام'; updateSendBtnState(); return; }
+  const shown = pendingFiles.slice(0, 3);
+  ab.innerHTML = shown.map(f => {
     const k = fileKind(f);
-    if (k === 'image') { const u = URL.createObjectURL(f); urls.push(u); return `<div class="cap-th"><img src="${u}" alt="" draggable="false"></div>`; }
-    const ic = k === 'video' ? '🎬' : k === 'audio' ? '🎵' : '📎';
-    return `<div class="cap-th file"><span>${ic}</span><em>${esc(f.name || 'file')}</em></div>`;
-  }).join('');
-  const inp = $('#cap-input');
-  inp.value = '';
-  const close = () => { modal.classList.remove('show'); urls.forEach(u => URL.revokeObjectURL(u)); };
-  $('#cap-cancel').onclick = close;
-  $('#cap-send').onclick = () => { const cap = inp.value.trim().slice(0, 1024); close(); sendPickedFiles(list, chatId, cap); };
-  modal.classList.add('show');
-  setTimeout(() => inp.focus(), 80);
+    if (k === 'image') { const u = URL.createObjectURL(f); pendingUrls.push(u); return `<div class="ab-th"><img src="${u}" alt="" draggable="false"></div>`; }
+    return `<div class="ab-th file"><span>${k === 'video' ? '🎬' : k === 'audio' ? '🎵' : '📎'}</span></div>`;
+  }).join('') + (pendingFiles.length > 3 ? `<div class="ab-th more">+${(pendingFiles.length - 3).toLocaleString('fa-IR')}</div>` : '');
+  ab.classList.add('show');
+  if (inputEl) inputEl.placeholder = 'کپشن…';
+  updateSendBtnState();
+}
+function clearPending() { pendingFiles = []; pendingChatId = null; renderAttachBar(); }
+function stageFiles(files, chatId) {
+  if (pendingChatId && pendingChatId !== chatId) pendingFiles = [];
+  pendingChatId = chatId;
+  pendingFiles = pendingFiles.concat(files).slice(0, 10);
+  if (pendingFiles.length >= 10 && files.length) toast('حداکثر ۱۰ فایل در هر بار', 'info');
+  renderAttachBar();
+  if (inputEl) inputEl.focus();
+}
+function submitComposer() {
+  if (!pendingFiles.length) { if (inputEl && inputEl.value.trim()) sendMessage(); return; }
+  const chat = getChat(pendingChatId);
+  if (!checkCanSend(chat)) return;
+  const files = pendingFiles, chatId = pendingChatId;
+  const caption = inputEl ? inputEl.value.trim().slice(0, 1024) : '';
+  if (inputEl) { inputEl.value = ''; autoGrow(); }
+  if (chat) chat.draft = '';
+  pendingFiles = []; pendingChatId = null; renderAttachBar();
+  sendPickedFiles(files, chatId, caption);
+  if (activeChatId === chatId) { replyToMsg = null; hideReplyBar(); }
+  save();
 }
 async function downloadMedia(m) {
   try {
@@ -1666,7 +1683,7 @@ function applyComposerLock(c) {
 function openChat(id) {
   const c = getChat(id);
   if (!c) return;
-  if (activeChatId !== id) { resetMediaEls(); stopVoice(); }
+  if (activeChatId !== id) { resetMediaEls(); stopVoice(); if (pendingFiles.length) clearPending(); }
   activeChatId = id;
   c.unread = 0; c.typing = false; c.typingSender = null;
   replyToMsg = null; hideReplyBar(); closeMsgSearch(); closeProfilePreview();
@@ -2368,7 +2385,7 @@ function beep() {
 const inputEl = $('#msg-input');
 const sendTextBtn = $('#btn-send-text');
 function autoGrow() { if (!inputEl) return; inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px'; }
-function updateSendBtnState() { if (!inputEl || !sendTextBtn) return; const has = inputEl.value.trim().length > 0; sendTextBtn.classList.toggle('show', has); }
+function updateSendBtnState() { if (!inputEl || !sendTextBtn) return; const has = inputEl.value.trim().length > 0 || pendingFiles.length > 0; sendTextBtn.classList.toggle('show', has); }
 
 if (inputEl) {
   inputEl.addEventListener('input', () => {
@@ -2379,8 +2396,7 @@ if (inputEl) {
   inputEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && state.settings.enterToSend && innerWidth > 820) {
       e.preventDefault();
-      const t = inputEl.value.trim();
-      if (t) { sendMessage(); }
+      submitComposer();
     }
   });
 }
@@ -2430,8 +2446,7 @@ if (inputEl && fmtBar) {
 if (sendTextBtn) {
   sendTextBtn.addEventListener('click', e => {
     e.preventDefault();
-    const t = inputEl ? inputEl.value.trim() : '';
-    if (t) sendMessage();
+    submitComposer();
   });
 }
 
@@ -2505,9 +2520,10 @@ function showReplyBar(m, quote) {
   $('#rb-text').textContent = quote ? quote : (m.deleted ? 'پیام حذف‌شده' : (m.type === 'text' ? stripFmt(m.text) : (m.caption || 'پیوست')));
   $('#reply-bar').classList.toggle('is-quote', !!quote);
   $('#reply-bar').classList.add('show');
+  layoutAttachBar();
   if (inputEl) inputEl.focus();
 }
-function hideReplyBar() { replyToMsg = null; replyQuote = null; replyQuoteName = null; const el = $('#reply-bar'); if (el) { el.classList.remove('show'); el.classList.remove('is-quote'); } }
+function hideReplyBar() { replyToMsg = null; replyQuote = null; replyQuoteName = null; const el = $('#reply-bar'); if (el) { el.classList.remove('show'); el.classList.remove('is-quote'); } layoutAttachBar(); }
 
 /* ---------- نقل قول (انتخاب بخشی از متن پیام) ---------- */
 function openQuotePicker(chat, m) {
