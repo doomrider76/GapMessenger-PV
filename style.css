@@ -881,15 +881,22 @@ html[data-theme="light"] .info-hero{background:linear-gradient(135deg,rgba(255,2
   .composer-voice,.composer-mini,.composer-input-wrap{background:#181818;}
 }
 
-/* ===== باکس اخطار (مینیمال) ===== */
-.msg.warning{background:var(--surface-2) !important;border:1px solid var(--line-2) !important;border-inline-start:3px solid #ef4444 !important;border-radius:16px !important;padding:0 !important;min-width:230px;max-width:86%;color:var(--text) !important;box-shadow:none !important;}
+/* ===== باکس اخطار (مینیمال مدرن) ===== */
+.msg.warning{
+  min-width:240px;max-width:86%;padding:0 !important;overflow:hidden;
+  background:var(--surface-2) !important;
+  border:1px solid var(--line-2) !important;
+  border-radius:20px !important;
+  color:var(--text) !important;
+  box-shadow:none !important;
+}
 .msg.warning .meta{display:none !important;}
-.msg.warning .msg-reactions{padding:0 12px 10px;}
-.warn-card .wc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px 0;}
-.warn-card .wc-badge{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:800;color:#ef4444;}
-.warn-card .wc-badge svg{fill:currentColor;}
-.warn-card .wc-when{font-size:11px;font-weight:500;color:var(--text-3);white-space:nowrap;}
-.warn-card .wc-reason{padding:6px 14px 12px;font-size:14.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:var(--text);}
+.msg.warning .msg-reactions{padding:0 14px 12px;}
+.warn-card .wc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 10px;border-bottom:1px solid var(--line);}
+.warn-card .wc-badge{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#ef4444;letter-spacing:-.1px;}
+.warn-card .wc-badge svg{fill:currentColor;width:24px;height:24px;padding:5px;border-radius:8px;background:rgba(239,68,68,.14);}
+.warn-card .wc-when{font-size:11px;font-weight:500;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.warn-card .wc-reason{padding:12px 14px 14px;font-size:14.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--text);}
 
 /* ===== مودال اخطار (ساده) ===== */
 .warn-box h3{padding:20px 22px 12px;}
@@ -1152,3 +1159,47 @@ html[data-theme="light"] .cmt-list .msg.out{background:#e6e6ea;color:#111}
 html[data-theme="light"] .cmt-list .msg .meta{color:rgba(0,0,0,.45)}
 html[data-theme="light"] .cmt-typing{background:#fff}
 html[data-theme="light"] .cmt-typing span{background:rgba(0,0,0,.4)}
+
+/* ---------- کپشن زیر رسانه ---------- */
+.msg .mcap{margin-top:8px;font-size:14.5px;line-height:1.55;}
+.cap-box{max-width:360px}
+.cap-preview{display:flex;gap:8px;overflow-x:auto;padding:4px 18px 10px;-webkit-overflow-scrolling:touch;}
+.cap-th{flex:0 0 auto;width:84px;height:84px;border-radius:14px;overflow:hidden;background:var(--surface);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;}
+.cap-th img{width:100%;height:100%;object-fit:cover;display:block}
+.cap-th.file{flex-direction:column;gap:4px;padding:6px;}
+.cap-th.file span{font-size:26px;line-height:1}
+.cap-th.file em{font-style:normal;font-size:10.5px;color:var(--text-3);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#cap-input{display:block;width:calc(100% - 36px);margin:4px 18px 0;border:1px solid var(--line-2);background:var(--surface);border-radius:14px;padding:11px 14px;font-size:16px;line-height:1.5;outline:none;text-align:right;color:var(--text);resize:none;font-family:inherit;box-sizing:border-box;user-select:text;-webkit-user-select:text;}
+#cap-input:focus{border-color:rgba(108,108,110,.5)}
+
+/* ---------- نقل قول ---------- */
+.reply-quote.has-quote{padding-right:12px;}
+.reply-quote.has-quote p{white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;text-overflow:clip;}
+.reply-bar.is-quote .rb-text{white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.45;}
+.reply-bar.is-quote .rb-bar{height:46px}
+.qp-hint{text-align:center;font-size:12.5px;color:var(--text-3);padding:0 22px 8px}
+.qp-box{margin:0 18px;padding:12px 14px;max-height:34vh;overflow-y:auto;border:1px solid var(--line-2);background:var(--surface);border-radius:14px;font-size:15px;line-height:1.7;white-space:pre-wrap;word-break:break-word;user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;text-align:right;}
+.qp-actions{display:flex;gap:8px;padding:12px 18px 8px}
+.qp-btn{flex:1;padding:12px 8px;border-radius:14px;background:var(--surface-2);color:var(--text);font-size:14px;font-weight:600;border:1px solid var(--line-2);}
+.qp-btn.ok{background:#6c6c6e;color:#fff;border-color:transparent}
+
+
+/* ---------- قالب‌بندی متن و باکس نقل قول داخل پیام ---------- */
+.composer-input-area{position:relative}
+.fmt-bar{display:none;position:absolute;bottom:calc(100% + 6px);right:10px;gap:2px;padding:4px;border-radius:14px;background:rgba(36,36,38,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.12);z-index:20;direction:ltr;}
+.fmt-bar.show{display:flex}
+.fmt-bar button{min-width:38px;height:34px;border-radius:10px;background:transparent;color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;padding:0 8px;touch-action:manipulation;-webkit-user-select:none;user-select:none;}
+.fmt-bar button:active{background:rgba(255,255,255,.18)}
+html[data-theme="light"] .fmt-bar{background:rgba(250,250,252,.95);border-color:rgba(0,0,0,.12)}
+html[data-theme="light"] .fmt-bar button{color:#000}
+html[data-theme="light"] .fmt-bar button:active{background:rgba(0,0,0,.1)}
+.msg blockquote.mq{margin:4px 0;padding:6px 12px 6px 10px;border-right:3px solid #8e8e93;background:rgba(255,255,255,.08);border-radius:8px;white-space:pre-wrap;font-size:14.5px;line-height:1.6;}
+.msg.out blockquote.mq{border-right-color:#fff;background:rgba(255,255,255,.12)}
+html[data-theme="light"] .msg blockquote.mq,html[data-theme="light"] .msg.out blockquote.mq{background:rgba(0,0,0,.06);border-right-color:rgba(0,0,0,.35)}
+.msg code.mc{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;direction:ltr;unicode-bidi:embed;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.12)}
+html[data-theme="light"] .msg code.mc{background:rgba(0,0,0,.08)}
+
+
+/* ---------- باکس نقل قول: هم‌سبک باکس‌های برنامه، با خط کناری هم‌رنگ اسم کانال ---------- */
+.msg blockquote.mq,.msg.out blockquote.mq{display:block;margin:12px 0 6px;padding:8px 12px 8px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-right:3px solid var(--qc,#6c6c6e);border-radius:12px;font-size:14px;line-height:1.6;}
+html[data-theme="light"] .msg blockquote.mq,html[data-theme="light"] .msg.out blockquote.mq{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);border-right-color:var(--qc,#6c6c6e);}
