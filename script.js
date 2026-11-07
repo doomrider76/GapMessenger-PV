@@ -275,7 +275,7 @@ async function wipeMedia() {
   _mdb = null; mediaUrls.clear(); mediaPending.clear();
   try { indexedDB.deleteDatabase(MEDIA_DB); } catch {}
 }
-const mediaFields = m => ({ mediaId: m.mediaId || null, thumbId: m.thumbId || null, mime: m.mime || null, fname: m.fname || null, w: m.w || null, h: m.h || null });
+const mediaFields = m => ({ mediaId: m.mediaId || null, thumbId: m.thumbId || null, mime: m.mime || null, fname: m.fname || null, w: m.w || null, h: m.h || null, caption: m.caption || '' });
 
 /* ---------- پخش‌کننده‌های ویدیو/صوت داخل پیام (بین رندرها زنده می‌مونن) ---------- */
 const mediaEls = new Map();      // msgId -> <video>/<audio>
@@ -418,9 +418,9 @@ function probeAudio(file) {
     a.src = url;
   });
 }
-async function sendOneFile(f, chatId) {
+async function sendOneFile(f, chatId, caption) {
   if (!f.size) { toast('«' + (f.name || 'فایل') + '» خالی است', 'error'); return; }
-  const base = { size: fmtBytes(f.size), mime: f.type || 'application/octet-stream', fname: f.name || '' };
+  const base = { size: fmtBytes(f.size), mime: f.type || 'application/octet-stream', fname: f.name || '', caption: caption || '' };
   let kind = fileKind(f);
   if (kind === 'image') {
     let info = null;
@@ -454,15 +454,16 @@ async function sendOneFile(f, chatId) {
   const mediaId = await mediaPut(f);
   sendMessage(Object.assign({ type: 'file', text: f.name || 'file', mediaId }, base), '', chatId);
 }
-async function sendPickedFiles(files, chatId) {
+async function sendPickedFiles(files, chatId, caption) {
   const chat = getChat(chatId);
   if (!checkCanSend(chat)) return;
   const list = [...files];
   if (list.length > 10) { toast('حداکثر ۱۰ فایل در هر بار', 'error'); list.length = 10; }
   const big = list.some(f => f.size > 20 * 1048576);
   if (big) toast('در حال ذخیره‌ی فایل…', 'info');
+  let cap = caption || '';
   for (const f of list) {
-    try { await sendOneFile(f, chatId); }
+    try { await sendOneFile(f, chatId, cap); cap = ''; }
     catch (e) { console.error(e); toast('ارسال «' + (f.name || 'فایل') + '» ناموفق بود (حافظه‌ی مرورگر پر است؟)', 'error'); }
   }
 }
@@ -476,9 +477,31 @@ function pickMedia(accept) {
   inp.style.display = 'none';
   document.body.appendChild(inp);
   const cleanup = () => setTimeout(() => inp.remove(), 1500);
-  inp.onchange = () => { const files = [...inp.files]; cleanup(); if (files.length) sendPickedFiles(files, chatId); };
+  inp.onchange = () => { const files = [...inp.files]; cleanup(); if (files.length) openCaptionModal(files, chatId); };
   inp.oncancel = cleanup;
   inp.click();
+}
+/* ---------- پیش‌نمایش و کپشن قبل از ارسال ---------- */
+function openCaptionModal(files, chatId) {
+  const modal = $('#cap-modal');
+  if (!modal) { sendPickedFiles(files, chatId); return; }
+  const list = [...files];
+  if (list.length > 10) { toast('حداکثر ۱۰ فایل در هر بار', 'error'); list.length = 10; }
+  const urls = [];
+  $('#cap-title').textContent = list.length > 1 ? list.length.toLocaleString('fa-IR') + ' فایل' : 'ارسال فایل';
+  $('#cap-preview').innerHTML = list.map(f => {
+    const k = fileKind(f);
+    if (k === 'image') { const u = URL.createObjectURL(f); urls.push(u); return `<div class="cap-th"><img src="${u}" alt="" draggable="false"></div>`; }
+    const ic = k === 'video' ? '🎬' : k === 'audio' ? '🎵' : '📎';
+    return `<div class="cap-th file"><span>${ic}</span><em>${esc(f.name || 'file')}</em></div>`;
+  }).join('');
+  const inp = $('#cap-input');
+  inp.value = '';
+  const close = () => { modal.classList.remove('show'); urls.forEach(u => URL.revokeObjectURL(u)); };
+  $('#cap-cancel').onclick = close;
+  $('#cap-send').onclick = () => { const cap = inp.value.trim().slice(0, 1024); close(); sendPickedFiles(list, chatId, cap); };
+  modal.classList.add('show');
+  setTimeout(() => inp.focus(), 80);
 }
 async function downloadMedia(m) {
   try {
@@ -658,7 +681,8 @@ function previewText(c) {
   else if (m.type === 'poll') t = '📊 نظرسنجی';
   else if (m.type === 'location') t = '📍 موقعیت';
   else if (m.type === 'warning') t = '⚠️ اخطار سیستمی';
-  else t = m.text;
+  else t = stripFmt(m.text);
+  if (m.caption && !m.deleted && ['photo','video','audio','file'].includes(m.type)) t += ' ' + String(m.caption).replace(/\s+/g, ' ');
   if (c.type === 'group' && !m.out && m.sender) t = m.sender + ': ' + t;
   else if (m.out) t = 'شما: ' + t;
   return t;
@@ -699,12 +723,31 @@ function buildLinkPreview(url) {
   const domain = domainOf(url);
   return domain ? {url, domain, favicon:`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`} : null;
 }
-function renderRichText(text) {
+function stripFmt(t) {
+  return String(t || '').replace(/^> ?/gm, '').replace(/\*\*([^\n]+?)\*\*/g, '$1').replace(/__([^\n]+?)__/g, '$1').replace(/~~([^\n]+?)~~/g, '$1').replace(/`([^\n`]+)`/g, '$1');
+}
+function renderRichText(text, qColor) {
   if (!text) return '';
-  let out = esc(text);
-  out = out.replace(URL_RE, m => `<a href="${m}" target="_blank" rel="noopener" style="color:#6c6c6e;text-decoration:underline">${m}</a>`);
-  out = out.replace(MENTION_RE, (f, n) => `<a class="mention-link" data-mention="${esc(n)}">@${esc(n)}</a>`);
-  return out;
+  const inline = str => {
+    let out = str;
+    out = out.replace(/`([^`\n]+)`/g, '<code class="mc">$1</code>');
+    out = out.replace(/\*\*([^\n*][^\n]*?)\*\*/g, '<b>$1</b>');
+    out = out.replace(/__([^\n_][^\n]*?)__/g, '<i>$1</i>');
+    out = out.replace(/~~([^\n~][^\n]*?)~~/g, '<s>$1</s>');
+    out = out.replace(URL_RE, m => `<a href="${m}" target="_blank" rel="noopener" style="color:#6c6c6e;text-decoration:underline">${m}</a>`);
+    out = out.replace(MENTION_RE, (f, n) => `<a class="mention-link" data-mention="${esc(n)}">@${esc(n)}</a>`);
+    return out;
+  };
+  const blocks = [];
+  esc(text).split('\n').forEach(ln => {
+    const q = /^&gt; ?/.test(ln);
+    const body = q ? ln.replace(/^&gt; ?/, '') : ln;
+    const last = blocks[blocks.length - 1];
+    if (last && last.q === q) last.lines.push(body); else blocks.push({ q, lines: [body] });
+  });
+  return blocks.map(b => b.q
+    ? `<blockquote class="mq"${qColor ? ` style="--qc:${esc(qColor)}"` : ''}>${inline(b.lines.join('\n'))}</blockquote>`
+    : inline(b.lines.join('\n'))).join('');
 }
 function firstMention(text) {
   if (!text) return null;
@@ -1248,7 +1291,7 @@ function banUser(chatId) {
 }
 
 /* ---------- render: messages ---------- */
-let activeChatId = null, replyToMsg = null;
+let activeChatId = null, replyToMsg = null, replyQuote = null, replyQuoteName = null;
 let msgSearchQuery = '', msgSearchHits = [], msgSearchIndex = -1;
 const renderedIds = new Set();
 
@@ -1309,15 +1352,15 @@ function simulatePollVotes(chat, pollMsg) {
 const pinCursor = {};
 function getPinned(chat) { return chat ? chat.messages.filter(m => m.pinned && !m.deleted) : []; }
 function pinPreview(m) {
-  if (m.type === 'photo') return '📷 ' + (m.text || 'عکس');
+  if (m.type === 'photo') return '📷 ' + (m.caption || m.text || 'عکس');
   if (m.type === 'voice') return '🎤 پیام صوتی';
-  if (m.type === 'video') return '🎬 ' + (m.text || 'ویدیو');
+  if (m.type === 'video') return '🎬 ' + (m.caption || m.text || 'ویدیو');
   if (m.type === 'audio') return '🎵 ' + (m.fname || 'فایل صوتی');
   if (m.type === 'file') return '📎 ' + (m.text || 'فایل');
   if (m.type === 'location') return '📍 موقعیت مکانی';
   if (m.type === 'poll') return '📊 ' + (m.poll && m.poll.question || 'نظرسنجی');
   if (m.type === 'warning' || m.isWarning) return '⚠️ اخطار';
-  return String(m.text || '').replace(/\s+/g, ' ').trim();
+  return stripFmt(m.text || '').replace(/\s+/g, ' ').trim();
 }
 function pinIndex(chat, n) {
   let i = pinCursor[chat.id];
@@ -1359,11 +1402,14 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
   const cls = `msg ${m.out?'out':'in'}${isNew?'':' no-anim'}${(chat.type==='ai'&&!m.out)?' ai':''}${(m.type === 'warning' || m.isWarning)?' warning':''}${msgSearchHits.includes(m.id)?' search-hit':''}`;
   let inner = '';
 
-  if (m.replyTo) {
-    const r = chat.messages.find(x => x.id === m.replyTo);
-    if (r) {
+  if (m.replyTo || m.quote) {
+    const r = m.replyTo ? chat.messages.find(x => x.id === m.replyTo) : null;
+    if (m.quote) {
+      const nm = r ? (r.out ? 'شما' : (r.sender || chat.name)) : (m.quoteName || chat.name);
+      inner += `<div class="reply-quote has-quote"><b>${esc(nm)}</b><p>${esc(m.quote)}</p></div>`;
+    } else if (r) {
       const nm = r.out ? 'شما' : (r.sender || chat.name);
-      const tx = r.deleted ? 'پیام حذف‌شده' : (r.type === 'text' ? r.text : 'پیوست');
+      const tx = r.deleted ? 'پیام حذف‌شده' : (r.type === 'text' ? stripFmt(r.text) : (r.caption || 'پیوست'));
       inner += `<div class="reply-quote"><b>${esc(nm)}</b><p>${esc(tx)}</p></div>`;
     }
   }
@@ -1420,7 +1466,7 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
       <div class="poll-footer">${totalVotes.toLocaleString('fa-IR')} رای ${hasVoted ? '· شما رای داده‌اید' : ''}</div>
     </div>`;
   } else {
-    inner += `<div class="btext">${msgSearchQuery ? highlightMatch(m.text, msgSearchQuery) : renderRichText(m.text)}</div>`;
+    inner += `<div class="btext">${msgSearchQuery ? highlightMatch(m.text, msgSearchQuery) : renderRichText(m.text, getChannelColor(chat))}</div>`;
     if (m.linkPreview && m.linkPreview.domain) {
       inner += `<a class="link-preview" href="${esc(m.linkPreview.url)}" target="_blank" rel="noopener"><div class="lp-header"><img class="lp-favicon" src="${esc(m.linkPreview.favicon)}" alt="" onerror="this.style.display='none'"><span class="lp-domain">${esc(m.linkPreview.domain)}</span></div><div class="lp-url">${esc(m.linkPreview.url)}</div></a>`;
     }
@@ -1429,6 +1475,9 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
       const mp = mentionPreview(mention);
       if (mp) inner += `<a class="mention-preview" data-mention-preview="${esc(mp.username)}"><div class="mp-header"><div class="mp-avatar" style="${avatarBgStyle({name:mp.name})}">${esc(initials(mp.name))}</div><span class="mp-name">${esc(mp.name)}${mp.badgeType?vfHTML(mp.badgeType,15):''}</span></div><span class="mp-sub">@${esc(mp.username)} · ${mp.type==='channel'?'کانال':mp.type==='group'?'گروه':'کاربر'}</span></a>`;
     }
+  }
+  if (m.caption && !m.deleted && (m.type === 'photo' || m.type === 'video' || m.type === 'audio' || m.type === 'file')) {
+    inner += `<div class="btext mcap">${msgSearchQuery ? highlightMatch(m.caption, msgSearchQuery) : renderRichText(m.caption, getChannelColor(chat))}</div>`;
   }
   inner += renderReactions(m);
 
@@ -2172,7 +2221,8 @@ function sendMessage(extra = {}, textOverride, chatIdOverride) {
   }
   const m = Object.assign({
     id:rid(), text, out:true, ts:Date.now(), status:'sent', type:'text', author:state.me.name,
-    replyTo:(chat.id === activeChatId ? replyToMsg : null), reactions:{}, deleted:false, editedForAll:false,
+    replyTo:(chat.id === activeChatId ? replyToMsg : null), quote:(chat.id === activeChatId && replyToMsg ? replyQuote : null),
+    quoteName:(chat.id === activeChatId && replyToMsg && replyQuote ? replyQuoteName : null), reactions:{}, deleted:false, editedForAll:false,
     seenCount:0, seenTarget:0, linkPreview:null, _fakeReactionCounts:{}, comments:[]
   }, extra);
   if (m.type === 'text' && m.text) {
@@ -2195,9 +2245,9 @@ function sendMessage(extra = {}, textOverride, chatIdOverride) {
   if (chat.type !== 'saved') simFakeReactions(chat, m);
   setTimeout(() => { m.status = 'delivered'; if (activeChatId === chat.id) renderMessages(false); save(); }, 600);
   setTimeout(() => { m.status = 'read'; if (activeChatId === chat.id) renderMessages(false); save(); }, 1700);
-  if (chat.type === 'ai') { if (state.settings.aiMode && navigator.onLine) scheduleAIReply(chat, m.text); else scheduleReply(chat); return; }
+  if (chat.type === 'ai') { if (state.settings.aiMode && navigator.onLine) scheduleAIReply(chat, m.text || m.caption || ''); else scheduleReply(chat); return; }
   if (state.settings.autoReply && chat.type !== 'saved' && chat.type !== 'channel') {
-    if (state.settings.aiMode && navigator.onLine) scheduleAIReply(chat, m.text);
+    if (state.settings.aiMode && navigator.onLine) scheduleAIReply(chat, m.text || m.caption || '');
     else scheduleReply(chat);
   }
   if (m.type === 'poll') simulatePollVotes(chat, m);
@@ -2334,6 +2384,49 @@ if (inputEl) {
     }
   });
 }
+/* ---------- نوار قالب‌بندی متن (بولد، ایتالیک، نقل قول ...) ---------- */
+const fmtBar = $('#fmt-bar');
+function updateFmtBar() {
+  if (!inputEl || !fmtBar) return;
+  const show = document.activeElement === inputEl && inputEl.selectionStart !== inputEl.selectionEnd;
+  fmtBar.classList.toggle('show', show);
+}
+function applyFmt(kind) {
+  const el = inputEl; if (!el) return;
+  const v = el.value, a = el.selectionStart, b = el.selectionEnd;
+  if (a === b) return;
+  if (kind === 'quote') {
+    const ls = v.lastIndexOf('\n', a - 1) + 1;
+    let le = v.indexOf('\n', b); if (le < 0) le = v.length;
+    const seg = v.slice(ls, le).split('\n');
+    const allQ = seg.every(l => /^> ?/.test(l));
+    const out = seg.map(l => allQ ? l.replace(/^> ?/, '') : '> ' + l).join('\n');
+    el.value = v.slice(0, ls) + out + v.slice(le);
+    el.setSelectionRange(ls, ls + out.length);
+  } else {
+    const mk = { bold: '**', italic: '__', strike: '~~', code: '`' }[kind];
+    if (!mk) return;
+    const sel = v.slice(a, b);
+    let out, na, nb;
+    if (sel.length >= mk.length * 2 && sel.startsWith(mk) && sel.endsWith(mk)) { out = sel.slice(mk.length, sel.length - mk.length); }
+    else { out = mk + sel + mk; }
+    el.value = v.slice(0, a) + out + v.slice(b);
+    na = a; nb = a + out.length;
+    el.setSelectionRange(na, nb);
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.focus();
+  updateFmtBar();
+}
+if (inputEl && fmtBar) {
+  ['select', 'keyup', 'mouseup', 'touchend', 'focus', 'blur'].forEach(ev => inputEl.addEventListener(ev, () => setTimeout(updateFmtBar, 30)));
+  document.addEventListener('selectionchange', updateFmtBar);
+  fmtBar.querySelectorAll('[data-fmt]').forEach(btn => {
+    btn.addEventListener('pointerdown', e => e.preventDefault());
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('click', e => { e.preventDefault(); applyFmt(btn.dataset.fmt); });
+  });
+}
 if (sendTextBtn) {
   sendTextBtn.addEventListener('click', e => {
     e.preventDefault();
@@ -2402,15 +2495,45 @@ const recCancelBtn = $('#rec-cancel');
 if (recCancelBtn) recCancelBtn.addEventListener('click', () => stopRec(true));
 
 /* ---------- reply bar ---------- */
-function showReplyBar(m) {
+function showReplyBar(m, quote) {
   replyToMsg = m.id;
+  replyQuote = quote || null;
   const chat = getChat(activeChatId);
-  $('#rb-name').textContent = m.out ? 'شما' : (m.sender || chat.name);
-  $('#rb-text').textContent = m.deleted ? 'پیام حذف‌شده' : (m.type === 'text' ? m.text : 'پیوست');
+  const nm = m.out ? 'شما' : (m.sender || chat.name);
+  replyQuoteName = nm;
+  $('#rb-name').textContent = quote ? 'نقل قول از ' + nm : nm;
+  $('#rb-text').textContent = quote ? quote : (m.deleted ? 'پیام حذف‌شده' : (m.type === 'text' ? stripFmt(m.text) : (m.caption || 'پیوست')));
+  $('#reply-bar').classList.toggle('is-quote', !!quote);
   $('#reply-bar').classList.add('show');
   if (inputEl) inputEl.focus();
 }
-function hideReplyBar() { replyToMsg = null; const el = $('#reply-bar'); if (el) el.classList.remove('show'); }
+function hideReplyBar() { replyToMsg = null; replyQuote = null; replyQuoteName = null; const el = $('#reply-bar'); if (el) { el.classList.remove('show'); el.classList.remove('is-quote'); } }
+
+/* ---------- نقل قول (انتخاب بخشی از متن پیام) ---------- */
+function openQuotePicker(chat, m) {
+  const src = String(m.type === 'text' ? (m.text || '') : (m.caption || '')).trim();
+  if (!src) return;
+  openSheet(`<div class="sheet-title">نقل قول</div>
+    <div class="qp-hint">بخشی از متن را انتخاب کن، یا کل پیام را نقل کن</div>
+    <div class="qp-box" id="qp-box">${esc(src)}</div>
+    <div class="qp-actions"><button class="qp-btn" id="qp-sel">نقل بخش انتخاب‌شده</button><button class="qp-btn ok" id="qp-all">نقل کل پیام</button></div>`);
+  const box = $('#qp-box');
+  let last = '';
+  const onSel = () => {
+    if (!document.getElementById('qp-box')) { document.removeEventListener('selectionchange', onSel); return; }
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && !sel.isCollapsed && box.contains(sel.anchorNode) && box.contains(sel.focusNode)) last = sel.toString().trim();
+  };
+  document.addEventListener('selectionchange', onSel);
+  const pick = text => {
+    document.removeEventListener('selectionchange', onSel);
+    closeSheet();
+    showReplyBar(m, text.length > 300 ? text.slice(0, 300) + '…' : text);
+  };
+  ['qp-sel', 'qp-all'].forEach(id => { const b = $('#' + id); b.addEventListener('mousedown', e => e.preventDefault()); b.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); });
+  $('#qp-sel').onclick = () => { if (!last) { toast('اول بخشی از متن را انتخاب کن', 'info'); return; } pick(last); };
+  $('#qp-all').onclick = () => pick(src);
+}
 const rbClose = $('#rb-close');
 if (rbClose) rbClose.addEventListener('click', hideReplyBar);
 
@@ -2582,7 +2705,8 @@ function showMsgMenu(el) {
   if (m.type !== 'warning') {
     items += `<div class="sheet-item" data-mact="react">${icon('smile')}واکنش</div>`;
   }
-  if (m.type === 'text' && !m.deleted) items += `<div class="sheet-item" data-mact="copy">${icon('copy')}کپی</div>`;
+  if ((m.type === 'text' || m.caption) && !m.deleted) items += `<div class="sheet-item" data-mact="quote">${icon('reply')}پاسخ با نقل قول</div>`;
+  if ((m.type === 'text' || m.caption) && !m.deleted) items += `<div class="sheet-item" data-mact="copy">${icon('copy')}کپی</div>`;
   if (m.mediaId && !m.deleted) items += `<div class="sheet-item" data-mact="download">${icon('save')}ذخیره در دستگاه</div>`;
   if (m.out && m.type === 'text' && !m.deleted) items += `<div class="sheet-item" data-mact="edit">${icon('edit')}ویرایش</div>`;
   if (!m.deleted && chat.type !== 'saved') items += `<div class="sheet-item" data-mact="save">${icon('bookmark')}ذخیره</div>`;
@@ -2632,6 +2756,7 @@ function saveToSaved(chat, m) {
 
 function handleMsgAction(act, chat, m) {
   if (act === 'reply') { showReplyBar(m); return; }
+  if (act === 'quote') { openQuotePicker(chat, m); return; }
   if (act === 'pin') {
     m.pinned = !m.pinned;
     if (m.pinned) m.pinTs = Date.now(); else delete m.pinTs;
@@ -2641,7 +2766,7 @@ function handleMsgAction(act, chat, m) {
     return;
   }
   if (act === 'download') { downloadMedia(m); return; }
-  if (act === 'copy') { copyClip(m.text||'').then(()=>toast('کپی شد', 'success'), ()=>toast('کپی نشد', 'error')); return; }
+  if (act === 'copy') { copyClip((m.type === 'text' ? m.text : m.caption) || m.text || '').then(()=>toast('کپی شد', 'success'), ()=>toast('کپی نشد', 'error')); return; }
   if (act === 'edit') {
     showPrompt('ویرایش پیام', m.text, val => {
       if (!val.trim()) return;
