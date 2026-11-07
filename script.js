@@ -1,5 +1,5 @@
 /* =========================================================
-   گپ v1.0.2 — Real media, channel comments & signatures
+   گپ v1.0.3
    ========================================================= */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -8,7 +8,7 @@ const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const icon = (n, s = 20) => `<svg width="${s}" height="${s}"><use href="#i-${n}"/></svg>`;
 const KEY = 'pisfon_v3', BACKUP_KEY = 'pisfon_backup_auto', VERSION_KEY = 'pisfon_version';
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 // --- تاریخ عضویت (شمسی) ---
 function getPersianDate(ts = Date.now()) {
@@ -40,10 +40,12 @@ document.addEventListener('contextmenu', e => {
 
 /* ---------- constants ---------- */
 const CHANGELOG = [
-  'ارسال واقعی عکس، ویدیو، فایل و ویس (قابل پخش و ذخیره)',
-  'کامنت زیر پست‌های کانال (از تنظیمات کانال فعال/غیرفعال می‌شود)',
-  'امضای پیام‌ها: نمایش نام نویسنده زیر هر پست کانال',
-  'ذخیره‌ی فایل‌ها در حافظه‌ی مرورگر بدون پر شدن حافظه‌ی برنامه'
+  'افزایش سرعت برنامه',
+  'رفع باگ‌های گزارش‌شده',
+  'رفع مشکلات تم روشن',
+  'قابلیت پین کردن پیام‌ها',
+  'امکان نوشتن متن در قالب‌های مختلف',
+  'امکان ارسال عکس، ویدیو و فایل در حجم بالا'
 ];
 const AV_GRADS = [
   ['#ff6b6b','#c92a2a'],['#51cf66','#2b8a3e'],['#ffd43b','#e67700'],['#4dabf7','#1864ab'],
@@ -192,8 +194,17 @@ function save() {
 
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', state.theme || 'dark');
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = state.theme === 'light' ? '#ffffff' : '#131313';
+  const isLight = state.theme === 'light';
+  const bgColor = isLight ? '#ffffff' : '#131313';
+  /* theme-color: remove old tags and add a fresh one so the status bar / notification shade updates immediately */
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.remove());
+  const tc = document.createElement('meta');
+  tc.name = 'theme-color'; tc.content = bgColor;
+  document.head.appendChild(tc);
+  const cs = document.querySelector('meta[name="color-scheme"]');
+  if (cs) cs.content = isLight ? 'light' : 'dark';
+  document.documentElement.style.backgroundColor = bgColor;
+  if (document.body) document.body.style.backgroundColor = bgColor;
   try { if (typeof activeChatId !== 'undefined' && activeChatId) applyWallpaper(getChat(activeChatId)); } catch {}
 }
 applyTheme();
@@ -258,6 +269,7 @@ function collectMediaIds() {
   const scan = chats => (chats || []).forEach(c => (c.messages || []).forEach(m => {
     if (m.mediaId) ids.add(m.mediaId);
     if (m.thumbId) ids.add(m.thumbId);
+    (m.items || []).forEach(it => { if (it.mediaId) ids.add(it.mediaId); if (it.thumbId) ids.add(it.thumbId); });
   }));
   scan(state.me && state.me.chats);
   (state.accounts || []).forEach(a => scan(a.chats));
@@ -275,7 +287,14 @@ async function wipeMedia() {
   _mdb = null; mediaUrls.clear(); mediaPending.clear();
   try { indexedDB.deleteDatabase(MEDIA_DB); } catch {}
 }
-const mediaFields = m => ({ mediaId: m.mediaId || null, thumbId: m.thumbId || null, mime: m.mime || null, fname: m.fname || null, w: m.w || null, h: m.h || null, caption: m.caption || '' });
+function findMedia(chat, id) {
+  if (!chat) return null;
+  const sid = String(id), k = sid.indexOf('~');
+  if (k < 0) return chat.messages.find(x => x.id === sid) || null;
+  const m = chat.messages.find(x => x.id === sid.slice(0, k));
+  return (m && m.items && m.items[+sid.slice(k + 1)]) || null;
+}
+const mediaFields = m => ({ items: m.items ? m.items.map(x => Object.assign({}, x)) : undefined, mediaId: m.mediaId || null, thumbId: m.thumbId || null, mime: m.mime || null, fname: m.fname || null, w: m.w || null, h: m.h || null, caption: m.caption || '' });
 
 /* ---------- پخش‌کننده‌های ویدیو/صوت داخل پیام (بین رندرها زنده می‌مونن) ---------- */
 const mediaEls = new Map();      // msgId -> <video>/<audio>
@@ -288,7 +307,7 @@ function mountMediaEl(slot) {
   let el = mediaEls.get(id);
   if (!el) {
     const chat = getChat(activeChatId);
-    const m = chat && chat.messages.find(x => x.id === id);
+    const m = findMedia(chat, id);
     if (!m || !m.mediaId) return;
     el = document.createElement(kind === 'audio' ? 'audio' : 'video');
     el.controls = true;
@@ -306,6 +325,7 @@ function mountMediaEl(slot) {
 function patchMessages(box, html) {
   const playing = [];
   mediaEls.forEach((el, id) => { if (!el.paused && !el.ended && el.isConnected && box.contains(el)) playing.push(id); });
+  const midOf = id => String(id).split('~')[0];
   if (!playing.length) { box.innerHTML = html; return; }
   const tpl = document.createElement('template');
   tpl.innerHTML = html;
@@ -314,7 +334,7 @@ function patchMessages(box, html) {
   const keep = new Map();
   playing.forEach(id => {
     const old = mediaEls.get(id).closest('.msg-group-row') || mediaEls.get(id).closest('.msg');
-    if (old && old.parentNode === box && kids.some(k => idOf(k) === id)) keep.set(id, old);
+    if (old && old.parentNode === box && kids.some(k => idOf(k) === midOf(id))) keep.set(midOf(id), old);
   });
   if (!keep.size) { box.innerHTML = html; return; }
   const keptNodes = new Set(keep.values());
@@ -454,6 +474,36 @@ async function sendOneFile(f, chatId, caption) {
   const mediaId = await mediaPut(f);
   sendMessage(Object.assign({ type: 'file', text: f.name || 'file', mediaId }, base), '', chatId);
 }
+async function buildItem(f) {
+  if (!f.size) { toast('«' + (f.name || 'فایل') + '» خالی است', 'error'); return null; }
+  const base = { size: fmtBytes(f.size), mime: f.type || 'application/octet-stream', fname: f.name || '' };
+  let kind = fileKind(f);
+  if (kind === 'image') {
+    let info = null;
+    try { info = await prepareImage(f); } catch {}
+    if (info) {
+      const mediaId = await mediaPut(f);
+      const thumbId = info.thumb ? await mediaPut(info.thumb) : mediaId;
+      return Object.assign({ type: 'photo', mediaId, thumbId, w: info.w, h: info.h }, base);
+    }
+    kind = 'file';
+  }
+  if (kind === 'video') {
+    const info = await probeVideo(f);
+    if (info) {
+      const mediaId = await mediaPut(f);
+      const thumbId = info.poster ? await mediaPut(info.poster) : null;
+      return Object.assign({ type: 'video', mediaId, thumbId, w: info.w, h: info.h, dur: Math.round(info.dur * 10) / 10 }, base);
+    }
+    kind = 'file';
+  }
+  if (kind === 'audio') {
+    const dur = await probeAudio(f);
+    if (dur !== null) { const mediaId = await mediaPut(f); return Object.assign({ type: 'audio', mediaId, dur: Math.round(dur * 10) / 10 }, base); }
+  }
+  const mediaId = await mediaPut(f);
+  return Object.assign({ type: 'file', text: f.name || 'file', mediaId }, base);
+}
 async function sendPickedFiles(files, chatId, caption) {
   const chat = getChat(chatId);
   if (!checkCanSend(chat)) return;
@@ -461,11 +511,20 @@ async function sendPickedFiles(files, chatId, caption) {
   if (list.length > 10) { toast('حداکثر ۱۰ فایل در هر بار', 'error'); list.length = 10; }
   const big = list.some(f => f.size > 20 * 1048576);
   if (big) toast('در حال ذخیره‌ی فایل…', 'info');
-  let cap = caption || '';
-  for (const f of list) {
-    try { await sendOneFile(f, chatId, cap); cap = ''; }
-    catch (e) { console.error(e); toast('ارسال «' + (f.name || 'فایل') + '» ناموفق بود (حافظه‌ی مرورگر پر است؟)', 'error'); }
+  const cap = caption || '';
+  if (list.length === 1) {
+    try { await sendOneFile(list[0], chatId, cap); }
+    catch (e) { console.error(e); toast('ارسال «' + (list[0].name || 'فایل') + '» ناموفق بود (حافظه‌ی مرورگر پر است؟)', 'error'); }
+    return;
   }
+  const items = [];
+  for (const f of list) {
+    try { const it = await buildItem(f); if (it) items.push(it); }
+    catch (e) { console.error(e); toast('ذخیره‌ی «' + (f.name || 'فایل') + '» ناموفق بود (حافظه‌ی مرورگر پر است؟)', 'error'); }
+  }
+  if (!items.length) return;
+  if (items.length === 1) sendMessage(Object.assign({ text: '' }, items[0], { caption: cap }), '', chatId);
+  else sendMessage({ type: 'album', items, caption: cap }, '', chatId);
 }
 function pickMedia(accept) {
   const chat = getChat(activeChatId);
@@ -491,13 +550,25 @@ function renderAttachBar() {
   const shown = pendingFiles.slice(0, 3);
   ab.innerHTML = shown.map(f => {
     const k = fileKind(f);
-    if (k === 'image') { const u = URL.createObjectURL(f); pendingUrls.push(u); return `<div class="ab-th"><img src="${u}" alt="" draggable="false"></div>`; }
-    return `<div class="ab-th file"><span>${k === 'video' ? '🎬' : k === 'audio' ? '🎵' : '📎'}</span></div>`;
-  }).join('') + (pendingFiles.length > 3 ? `<div class="ab-th more">+${(pendingFiles.length - 3).toLocaleString('fa-IR')}</div>` : '');
+    const i = pendingFiles.indexOf(f);
+    if (k === 'image') { const u = URL.createObjectURL(f); pendingUrls.push(u); return `<div class="ab-th" data-ab-rm="${i}"><img src="${u}" alt="" draggable="false"></div>`; }
+    return `<div class="ab-th file" data-ab-rm="${i}"><span>${k === 'video' ? '🎬' : k === 'audio' ? '🎵' : '📎'}</span></div>`;
+  }).join('') + (pendingFiles.length > 3 ? `<div class="ab-th more" data-ab-rm="${pendingFiles.length - 1}">+${(pendingFiles.length - 3).toLocaleString('fa-IR')}</div>` : '');
   ab.classList.add('show');
   if (inputEl) inputEl.placeholder = 'کپشن…';
   updateSendBtnState();
 }
+(function () {
+  const ab = $('#attach-bar');
+  if (ab) ab.addEventListener('click', e => {
+    const t = e.target.closest('[data-ab-rm]'); if (!t) return;
+    e.preventDefault(); e.stopPropagation();
+    pendingFiles.splice(+t.dataset.abRm, 1);
+    if (!pendingFiles.length) pendingChatId = null;
+    renderAttachBar();
+    if (inputEl) inputEl.focus();
+  });
+})();
 function clearPending() { pendingFiles = []; pendingChatId = null; renderAttachBar(); }
 function stageFiles(files, chatId) {
   if (pendingChatId && pendingChatId !== chatId) pendingFiles = [];
@@ -534,14 +605,14 @@ async function downloadMedia(m) {
 }
 
 /* نمایش تمام‌صفحه‌ی عکس */
-function openViewer(m) {
+function openViewer(m, viewId) {
   const ov = $('#viewer-overlay');
   if (!ov) return;
   ov.innerHTML = `<button class="vw-btn vw-close" aria-label="بستن">${icon('close', 22)}</button><button class="vw-btn vw-dl" aria-label="ذخیره">${icon('arrow-down', 22)}</button><img alt="" draggable="false">`;
   const img = ov.querySelector('img');
   img.src = mediaUrlSync(m.thumbId || m.mediaId) || '';
   mediaUrl(m.mediaId).then(u => { if (u) img.src = u; });
-  ov.dataset.msg = m.id;
+  ov.dataset.msg = viewId || m.id;
   ov.classList.add('show');
 }
 function closeViewer() { const ov = $('#viewer-overlay'); if (ov) { ov.classList.remove('show'); setTimeout(() => { if (!ov.classList.contains('show')) ov.innerHTML = ''; }, 250); } }
@@ -692,6 +763,7 @@ function previewText(c) {
   if (m.deleted) t = '🚫 پیام حذف شد';
   else if (m.type === 'voice') t = '🎤 پیام صوتی';
   else if (m.type === 'photo') t = '🖼 عکس';
+  else if (m.type === 'album') t = '📎 ' + (m.items || []).length.toLocaleString('fa-IR') + ' فایل';
   else if (m.type === 'video') t = '🎬 ویدیو';
   else if (m.type === 'audio') t = '🎵 ' + (m.fname || 'فایل صوتی');
   else if (m.type === 'file') t = '📎 ' + (m.text || 'فایل');
@@ -699,7 +771,7 @@ function previewText(c) {
   else if (m.type === 'location') t = '📍 موقعیت';
   else if (m.type === 'warning') t = '⚠️ اخطار سیستمی';
   else t = stripFmt(m.text);
-  if (m.caption && !m.deleted && ['photo','video','audio','file'].includes(m.type)) t += ' ' + String(m.caption).replace(/\s+/g, ' ');
+  if (m.caption && !m.deleted && ['photo','video','audio','file','album'].includes(m.type)) t += ' ' + String(m.caption).replace(/\s+/g, ' ');
   if (c.type === 'group' && !m.out && m.sender) t = m.sender + ': ' + t;
   else if (m.out) t = 'شما: ' + t;
   return t;
@@ -1319,6 +1391,19 @@ function highlightMatch(text, q) {
   } catch { return esc(text); }
 }
 
+function albumItemHTML(it, id) {
+  if (it.type === 'photo') {
+    const pid = it.thumbId || it.mediaId, psrc = mediaUrlSync(pid);
+    const ar = (it.w && it.h) ? Math.min(1.8, Math.max(0.6, it.w / it.h)) : 1;
+    return `<div class="mbox photo" data-view="${esc(id)}" style="aspect-ratio:${ar}"><img data-mid="${esc(pid)}" ${psrc ? `src="${esc(psrc)}"` : ''} alt="" draggable="false"></div>`;
+  }
+  if (it.type === 'video') {
+    const ar = (it.w && it.h) ? Math.min(1.8, Math.max(0.6, it.w / it.h)) : 16 / 9;
+    return `<div class="mbox video" data-slot="${esc(id)}" data-kind="video" style="aspect-ratio:${ar}"></div>`;
+  }
+  if (it.type === 'audio') return `<div class="audiobox"><div class="abox-name">🎵 <span>${esc(it.fname || 'فایل صوتی')}</span></div><div class="abox-slot" data-slot="${esc(id)}" data-kind="audio"></div></div>`;
+  return `<div class="filemsg dl" data-dl="${esc(id)}"><div class="ficon">${icon('arrow-down',22)}</div><div class="fmeta"><span class="fname">${esc(it.text || it.fname || 'file')}</span><span class="fsize">${esc(it.size || '')}</span></div></div>`;
+}
 function renderReactions(m) {
   const real = m.reactions || {};
   const fake = m._fakeReactionCounts || {};
@@ -1371,6 +1456,7 @@ function getPinned(chat) { return chat ? chat.messages.filter(m => m.pinned && !
 function pinPreview(m) {
   if (m.type === 'photo') return '📷 ' + (m.caption || m.text || 'عکس');
   if (m.type === 'voice') return '🎤 پیام صوتی';
+  if (m.type === 'album') return '📎 ' + (m.caption || ((m.items || []).length.toLocaleString('fa-IR') + ' فایل'));
   if (m.type === 'video') return '🎬 ' + (m.caption || m.text || 'ویدیو');
   if (m.type === 'audio') return '🎵 ' + (m.fname || 'فایل صوتی');
   if (m.type === 'file') return '📎 ' + (m.text || 'فایل');
@@ -1461,6 +1547,12 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
   } else if (m.type === 'photo') {
     if (m.dataUrl) inner += `<div class="media" style="background:#000"><img src="${esc(m.dataUrl)}" alt="">${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
     else inner += `<div class="media" style="background:${m.bg||'linear-gradient(135deg,#667eea,#764ba2)'}">${icon('camera',56)}${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
+  } else if (m.type === 'album' && Array.isArray(m.items)) {
+    const idx = m.items.map((it, i) => [it, i]);
+    const vis = idx.filter(([it]) => it.type === 'photo' || it.type === 'video');
+    const rest = idx.filter(([it]) => it.type !== 'photo' && it.type !== 'video');
+    if (vis.length) inner += `<div class="album-grid${vis.length > 1 ? ' multi' : ''}">${vis.map(([it, i]) => albumItemHTML(it, m.id + '~' + i)).join('')}</div>`;
+    inner += rest.map(([it, i]) => albumItemHTML(it, m.id + '~' + i)).join('');
   } else if (m.type === 'location') {
     inner += `<div class="media" style="background:linear-gradient(135deg,#43cea2,#185a9d)">${icon('location',56)}${m.text?`<div class="cap">${esc(m.text)}</div>`:''}</div>`;
   } else if (m.type === 'file') {
@@ -1493,7 +1585,7 @@ function msgHTML(chat, m, prevMsg, nextMsg) {
       if (mp) inner += `<a class="mention-preview" data-mention-preview="${esc(mp.username)}"><div class="mp-header"><div class="mp-avatar" style="${avatarBgStyle({name:mp.name})}">${esc(initials(mp.name))}</div><span class="mp-name">${esc(mp.name)}${mp.badgeType?vfHTML(mp.badgeType,15):''}</span></div><span class="mp-sub">@${esc(mp.username)} · ${mp.type==='channel'?'کانال':mp.type==='group'?'گروه':'کاربر'}</span></a>`;
     }
   }
-  if (m.caption && !m.deleted && (m.type === 'photo' || m.type === 'video' || m.type === 'audio' || m.type === 'file')) {
+  if (m.caption && !m.deleted && (m.type === 'photo' || m.type === 'video' || m.type === 'audio' || m.type === 'file' || m.type === 'album')) {
     inner += `<div class="btext mcap">${msgSearchQuery ? highlightMatch(m.caption, msgSearchQuery) : renderRichText(m.caption, getChannelColor(chat))}</div>`;
   }
   inner += renderReactions(m);
@@ -2494,6 +2586,12 @@ function stopRec(cancel) {
       cleanup();
       if (cancel || dur < 0.8) { toast('ضبط لغو شد', 'info'); return; }
       const vChatId = recChatId;
+      if (pendingFiles.length && pendingChatId === vChatId) {
+        const ext = /mp4|aac/.test(blob.type) ? '.m4a' : '.webm';
+        stageFiles([new File([blob], 'voice-' + Date.now() + ext, { type: blob.type || 'audio/webm' })], vChatId);
+        toast('ویس به فایل‌ها اضافه شد', 'success');
+        return;
+      }
       mediaPut(blob).then(mediaId => {
         sendMessage({ type:'voice', dur:Math.round(dur*10)/10, mediaId, mime:blob.type || 'audio/webm', size:fmtBytes(blob.size) }, '', vChatId);
         toast('پیام صوتی ارسال شد', 'success');
@@ -2628,15 +2726,15 @@ $('#messages').addEventListener('click', e => {
   const fd = e.target.closest('.filemsg[data-dl]');
   if (fd) {
     if (recentLong) return;
-    const chat = getChat(activeChatId), m = chat && chat.messages.find(x => x.id === fd.dataset.dl);
+    const chat = getChat(activeChatId), m = findMedia(chat, fd.dataset.dl);
     if (m && m.mediaId) downloadMedia(m);
     return;
   }
   const pv = e.target.closest('.mbox.photo[data-view]');
   if (pv) {
     if (recentLong) return;
-    const chat = getChat(activeChatId), m = chat && chat.messages.find(x => x.id === pv.dataset.view);
-    if (m) openViewer(m);
+    const chat = getChat(activeChatId), m = findMedia(chat, pv.dataset.view);
+    if (m) openViewer(m, pv.dataset.view);
     return;
   }
   const btn = e.target.closest('.vplay');
@@ -2723,6 +2821,7 @@ function showMsgMenu(el) {
   }
   if ((m.type === 'text' || m.caption) && !m.deleted) items += `<div class="sheet-item" data-mact="quote">${icon('reply')}پاسخ با نقل قول</div>`;
   if ((m.type === 'text' || m.caption) && !m.deleted) items += `<div class="sheet-item" data-mact="copy">${icon('copy')}کپی</div>`;
+  if (m.type === 'album' && !m.deleted) items += `<div class="sheet-item" data-mact="download">${icon('save')}ذخیره‌ی همه‌ی فایل‌ها</div>`;
   if (m.mediaId && !m.deleted) items += `<div class="sheet-item" data-mact="download">${icon('save')}ذخیره در دستگاه</div>`;
   if (m.out && m.type === 'text' && !m.deleted) items += `<div class="sheet-item" data-mact="edit">${icon('edit')}ویرایش</div>`;
   if (!m.deleted && chat.type !== 'saved') items += `<div class="sheet-item" data-mact="save">${icon('bookmark')}ذخیره</div>`;
@@ -2781,7 +2880,10 @@ function handleMsgAction(act, chat, m) {
     toast(m.pinned ? 'پیام سنجاق شد' : 'سنجاق برداشته شد', 'info');
     return;
   }
-  if (act === 'download') { downloadMedia(m); return; }
+  if (act === 'download') {
+    if (m.type === 'album') { (m.items || []).filter(x => x.mediaId).forEach((it, i) => setTimeout(() => downloadMedia(it), i * 450)); return; }
+    downloadMedia(m); return;
+  }
   if (act === 'copy') { copyClip((m.type === 'text' ? m.text : m.caption) || m.text || '').then(()=>toast('کپی شد', 'success'), ()=>toast('کپی نشد', 'error')); return; }
   if (act === 'edit') {
     showPrompt('ویرایش پیام', m.text, val => {
@@ -2814,7 +2916,7 @@ function handleMsgAction(act, chat, m) {
   if (act === 'ban') { banUser(chat.id); return; }
   if (act === 'delete-all') {
     showConfirm('حذف برای همه', 'این پیام برای همه حذف شود؟', () => {
-      m.deleted = true; m.pinned = false; m.text = ''; m.dataUrl = null; m.mediaId = null; m.thumbId = null; m.comments = []; m.linkPreview = null;
+      m.deleted = true; m.pinned = false; m.text = ''; m.dataUrl = null; m.mediaId = null; m.thumbId = null; m.items = null; m.comments = []; m.linkPreview = null;
       m.reactions = {}; m._fakeReactionCounts = {};
       renderMessages(false); renderChatList(); save(); toast('حذف شد', 'success');
     }); return;
@@ -3929,7 +4031,7 @@ function sendComment() {
   const vw = $('#viewer-overlay');
   if (vw) vw.addEventListener('click', e => {
     if (e.target.closest('.vw-dl')) {
-      const chat = getChat(activeChatId), m = chat && chat.messages.find(x => x.id === vw.dataset.msg);
+      const chat = getChat(activeChatId), m = findMedia(chat, vw.dataset.msg);
       if (m && m.mediaId) downloadMedia(m);
       return;
     }
