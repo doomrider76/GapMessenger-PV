@@ -6,7 +6,7 @@
 //  ۴) اعلان‌های جداگانه برای هر اکانت (زنگوله‌ی بالای صفحه)
 //  ۵) هشتگ‌ها و ترندها (تب «کشف»)
 //  ۶) کاور پروفایل: نمایش کامل عکس بدون برش (مثل ویراستی)
-//  ۷) هدرِ یک‌تکه (به‌جای ۳ باکس) + باکس دوم (تب‌ها) + منوهای ۵۰٪ شفاف، دقیقاً مثل ویراستی
+//  ۷) هدرِ بالای هر بخش یک پنلِ گرد و ۵۰٪ شفاف هم‌اندازه؛ منوی دسته‌بندی ۱ پیکسل زیرش؛ نوار پایین چت (ویس/پیام/نظرسنجی/…) در یک باکس؛ منوها ۵۰٪ شفاف
 // این فایل script.js را تغییر نمی‌دهد؛ فقط توابع آن را دور می‌زند (wrap می‌کند).
 // ============================================================
 (() => {
@@ -612,85 +612,154 @@ function adminPanel() {
 }
 
 /* ============================================================
-   ۸) هدر یک‌تکه + باکس دوم + منوهای ۵۰٪ شفاف — مثل ویراستی
-   ویراستی: باکس اول (.top-header) و باکس دوم (.top-tabs) هر دو شناورند، چسبیده به لبه‌ی بالا
-   (top/left/right = 0)، گرد کامل (999px)، پس‌زمینه‌ی ۵۰٪ شفاف + blur(20px) saturate(180%)
-   و محتوا از زیرشان رد می‌شود. همین را برای گپ پیاده می‌کنیم:
-   - هدرِ همه‌ی بخش‌ها (لیست/مخاطبین/تنظیمات، چت، اطلاعات، پیش‌نمایش) از ۳ باکس جدا → یک باکس
-   - تب‌های فیلتر چت‌ها (همه/خصوصی/گروه/...) باکس دوم، زیر هدر با ۱ پیکسل فاصله
-   - منوهای پایین‌کشو (sheet) و پنل ری‌اکشن: ۵۰٪ شفاف + محو
+   ۸) هدرها یک پنل هم‌اندازه + منوی دسته‌بندی چسبیده + نوار پایین چت یک باکس + منوهای ۵۰٪ شفاف
+   - هدر هر چهار بخش (لیست، چت/کانال، اطلاعات، پیش‌نمایش) یک پنل است و همه هم‌ارتفاع‌اند (--fx-h)؛
+     محتوای هر بخش (آواتار، عنوان، اعضا، وضعیت، دکمه‌ها) دست‌نخورده است.
+   - منوی دسته‌بندی فقط در صفحه‌ی اصلی است (z-index پایین، مثل اصل برنامه) و دقیقاً (--fx-gap = ۱ پیکسل) زیر هدر می‌نشیند؛
+     ارتفاع هدر ثابت است، پس به اندازه‌گیری بستگی ندارد.
+   - لیست چت‌ها و کانال‌ها و شکل آواتار دست‌نخورده‌اند.
+   - نوار پایین چت: دکمه‌ی ویس، آیکن‌های عکس/فایل/نظرسنجی/ایموجی و کادر پیام همگی داخل یک باکس.
    ============================================================ */
 {
     const st = document.createElement('style');
     st.textContent = `
-:root{--hdr-h:56px;--pin-top:60px;--fx-glass:rgba(24,24,24,.5);--fx-ring:rgba(255,255,255,.12);--fx-hover:rgba(255,255,255,.10);--fx-active:rgba(255,255,255,.14)}
+:root{--fx-h:48px;--fx-gap:1px;--fx-glass:rgba(24,24,24,.5);--fx-ring:rgba(255,255,255,.12);--fx-hover:rgba(255,255,255,.10);--fx-active:rgba(255,255,255,.14)}
 html[data-theme="light"]{--fx-glass:rgba(255,255,255,.5);--fx-ring:rgba(0,0,0,.09);--fx-hover:rgba(0,0,0,.06);--fx-active:rgba(0,0,0,.08)}
 
-/* ---- باکس اول: هدر یک‌تکه (همه‌ی بخش‌ها) ---- */
+/* ---- هدر هر بخش: یک پنل گرد، هم‌ارتفاع ---- */
 #screen-list .main-hdr,#screen-chat .hdr.chat-hdr,#screen-info .hdr,#screen-profile .hdr{
-  position:absolute!important;top:0!important;left:0!important;right:0!important;
-  height:var(--hdr-h)!important;min-height:var(--hdr-h)!important;box-sizing:border-box!important;
-  display:flex!important;align-items:center!important;gap:6px!important;padding:0 10px!important;
+  position:absolute!important;top:0!important;left:0!important;right:0!important;box-sizing:border-box!important;
+  height:var(--fx-h)!important;min-height:0!important;padding:0 8px!important;gap:6px!important;
   background:var(--fx-glass)!important;
   backdrop-filter:blur(20px) saturate(180%)!important;-webkit-backdrop-filter:blur(20px) saturate(180%)!important;
   border:none!important;border-radius:999px!important;box-shadow:inset 0 0 0 1px var(--fx-ring)!important;
-  pointer-events:auto!important;z-index:20!important}
+  pointer-events:auto!important}
 
-/* دکمه‌های داخل هدر: بدون باکسِ جدا (شفاف، دایره‌ای فقط موقع لمس) */
-#screen-list .main-hdr .circle-btn,#screen-chat .hdr.chat-hdr .circle-btn,#screen-info .hdr .icon-btn,#screen-profile .hdr .icon-btn{
-  width:40px!important;height:40px!important;flex-shrink:0;border-radius:50%!important;position:relative;
+/* ---- باکس‌های جدای داخل هدر شفاف می‌شوند (همه‌شان یک پنل)؛ اندازه‌ی دکمه‌ها و آواتار دست‌نخورده است ---- */
+#screen-list .main-hdr .circle-btn,#screen-chat .hdr.chat-hdr .circle-btn,
+#screen-list .main-hdr .brand-pill,#screen-chat .hdr.chat-hdr .chat-hdr-center,
+#screen-info .hdr .icon-btn,#screen-profile .hdr .icon-btn{
   background:transparent!important;border:none!important;box-shadow:none!important;
   backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
-#screen-list .main-hdr .circle-btn:hover,#screen-chat .hdr.chat-hdr .circle-btn:hover,#screen-info .hdr .icon-btn:hover,#screen-profile .hdr .icon-btn:hover{background:var(--fx-hover)!important}
-#screen-list .main-hdr .circle-btn:active,#screen-chat .hdr.chat-hdr .circle-btn:active,#screen-info .hdr .icon-btn:active,#screen-profile .hdr .icon-btn:active{background:var(--fx-active)!important;transform:scale(.92)}
-
-/* آواتار پروفایل (سمت راست، مثل .header-avatar ویراستی) */
-#screen-list .main-hdr .profile-circle-btn{padding:0!important;border-radius:40%!important;overflow:hidden;border:2px solid rgba(255,255,255,.2)!important}
-html[data-theme="light"] #screen-list .main-hdr .profile-circle-btn{border-color:rgba(0,0,0,.12)!important}
-#screen-list .main-hdr .profile-square{width:100%!important;height:100%!important;border-radius:0!important}
-
-/* عنوان وسط (مثل .app-name ویراستی) */
-#screen-list .main-hdr .brand-pill,#screen-list .main-hdr .hdr-title{
-  background:transparent!important;border:none!important;box-shadow:none!important;height:auto!important;
-  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:0!important}
-#screen-list .main-hdr .brand-text{font-size:18px!important;font-weight:900!important;background:none!important;-webkit-text-fill-color:currentColor!important}
-
-/* هدر چت: اطلاعات وسط بدون باکسِ جدا */
-#screen-chat .hdr.chat-hdr .chat-hdr-center{
-  background:transparent!important;border:none!important;box-shadow:none!important;height:100%!important;
-  padding:0 4px!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#screen-list .main-hdr .circle-btn:hover,#screen-chat .hdr.chat-hdr .circle-btn:hover,
+#screen-info .hdr .icon-btn:hover,#screen-profile .hdr .icon-btn:hover{background:var(--fx-hover)!important}
+#screen-list .main-hdr .circle-btn:active,#screen-chat .hdr.chat-hdr .circle-btn:active,
+#screen-chat .hdr.chat-hdr .chat-hdr-center:active,
+#screen-info .hdr .icon-btn:active,#screen-profile .hdr .icon-btn:active{background:var(--fx-active)!important}
 #screen-chat .hdr.chat-hdr .chat-hdr-center:hover{background:transparent!important}
-#screen-chat .hdr.chat-hdr .chat-hdr-center:active{background:var(--fx-hover)!important}
 
-/* هدر اطلاعات و پیش‌نمایش: عنوان وسط */
-#screen-info .hdr .hdr-title,#screen-profile .hdr .hdr-title{background:transparent!important;border:none!important;box-shadow:none!important}
-
-/* ---- باکس دوم: تب‌های فیلتر چت‌ها، زیر هدر با ۱ پیکسل فاصله ---- */
-#tab-chats{padding-top:calc(var(--hdr-h) + 1px)!important}
+/* ---- منوی دسته‌بندی: یک پنل، ۱ پیکسل زیر هدر ---- */
+/* فاصله‌ی زیر هدر را با margin می‌دهیم نه padding: sticky در کروم padding والد را هم حساب می‌کند و فاصله دو برابر می‌شد */
+#tab-chats{padding-top:0!important}
+#tab-chats > #searchbar{margin-top:calc(var(--fx-h) + var(--fx-gap))!important}
+#tab-contacts,#tab-settings{padding-top:calc(var(--fx-h) + 10px)!important}
 #top-nav{
-  position:sticky!important;top:calc(var(--hdr-h) + 1px)!important;z-index:12;flex-shrink:0;
-  height:var(--hdr-h);box-sizing:border-box;margin:0 -8px 10px!important;padding:0 10px!important;gap:4px!important;align-items:center;
+  position:sticky!important;top:calc(var(--fx-h) + var(--fx-gap))!important;z-index:2;flex-shrink:0;
+  box-sizing:border-box;margin:calc(var(--fx-h) + var(--fx-gap)) -8px 8px!important;padding:5px 8px!important;gap:4px!important;align-items:center;
   background:var(--fx-glass)!important;
   backdrop-filter:blur(20px) saturate(180%)!important;-webkit-backdrop-filter:blur(20px) saturate(180%)!important;
   border:none!important;border-radius:999px!important;box-shadow:inset 0 0 0 1px var(--fx-ring)!important}
-#top-nav .tnav-item{
+/* وقتی نوار جستجو باز است، خودش زیر هدر می‌نشیند و منوی دسته‌بندی بلافاصله بعد از آن می‌آید */
+#searchbar:not([style*="none"]) + #top-nav{margin-top:0!important}
+#top-nav .tnav-item:not(.active){
   background:transparent!important;border:none!important;box-shadow:none!important;
-  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
-  height:38px;padding:0 14px!important;font-size:13px!important;font-weight:700!important;border-radius:999px!important}
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 #top-nav .tnav-item.active{background:var(--fx-active)!important;color:var(--text)!important}
 
-/* ---- منوها: ۵۰٪ شفاف + محوِ پشت ---- */
-.sheet{
-  background:var(--fx-glass)!important;
-  backdrop-filter:blur(22px) saturate(200%)!important;-webkit-backdrop-filter:blur(22px) saturate(200%)!important;
-  border-top:1px solid var(--fx-ring)!important}
-.overlay{background:rgba(0,0,0,.30)!important}
-.reaction-picker{
+/* ---- نوار پایین چت: ویس + عکس/فایل/نظرسنجی/ایموجی + کادر پیام = یک باکسِ کوچک ---- */
+:root{--composer-h:calc(var(--fx-h) + 12px)}
+.composer{
+  left:8px!important;right:8px!important;bottom:6px!important;box-sizing:border-box;
+  padding:4px 6px!important;gap:4px!important;
   background:var(--fx-glass)!important;
   backdrop-filter:blur(20px) saturate(180%)!important;-webkit-backdrop-filter:blur(20px) saturate(180%)!important;
-  border:1px solid var(--fx-ring)!important}
+  border-radius:24px!important;box-shadow:inset 0 0 0 1px var(--fx-ring)!important}
+.composer-voice,.composer-mini,.composer-input-wrap,
+.composer.warner-blocked .composer-input-wrap,.composer-input-wrap:focus-within{
+  background:transparent!important;border:none!important;box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.composer-input-area{gap:0!important}
+.composer-mini-actions{padding:0 2px!important;gap:4px!important}
+.composer-mini{width:24px!important;height:24px!important}
+.composer-voice{width:38px!important;height:38px!important}
+.composer-input-wrap{min-height:36px!important;padding:0 4px 0 6px!important}
+.composer-text-send{width:32px!important;height:32px!important}
+.composer-voice:active,.composer-mini:active{background:var(--fx-active)!important}
+
+/* ---- باکس چت یک‌ردیفه: دکمه‌های عکس/فایل/نظرسنجی/ایموجی در یک آیکن (سمت راستِ کادر تایپ) ---- */
+.composer-mini-actions{display:none!important}
+.composer{left:0!important;right:0!important;min-height:var(--fx-h)!important;padding:0 6px!important}
+.composer-voice{display:none!important}
+.composer > #btn-emoji.composer-mini{display:flex;align-items:center;justify-content:center;width:36px!important;height:36px!important;border-radius:50%;flex-shrink:0;cursor:pointer;padding:0}
+.composer > #btn-emoji svg{width:22px;height:22px}
+.composer > #btn-emoji.composer-mini,#btn-attach-menu.composer-mini,.composer-input-wrap .composer-text-send{width:34px!important;height:34px!important;align-self:center!important;margin:0!important}
+.composer-input-wrap{align-items:center!important}
+
+/* ---- نوار قالب‌بندی (بولد، نقل قول و...): بالای کل باکس چت، با ۱ پیکسل فاصله ---- */
+.composer-input-area,.composer-input-wrap{position:static!important}
+.composer .fmt-bar{
+  bottom:calc(100% + 1px)!important;right:0!important;left:auto!important;
+  background:var(--fx-glass)!important;
+  backdrop-filter:blur(20px) saturate(180%)!important;-webkit-backdrop-filter:blur(20px) saturate(180%)!important;
+  border:none!important;box-shadow:inset 0 0 0 1px var(--fx-ring)!important;
+  border-radius:999px!important;height:40px;align-items:center;padding:0 8px!important}
+.composer-input-wrap #msg-input,.composer-input-wrap .attach-bar{align-self:center!important;margin:0!important}
+.composer{align-items:center!important}
+#btn-attach-menu.composer-mini{display:flex;align-items:center;justify-content:center;width:34px!important;height:34px!important;border-radius:50%;flex-shrink:0;cursor:pointer;padding:0}
+#btn-attach-menu svg{opacity:.9}
+.composer.warner-blocked #btn-attach-menu{display:none!important}
+.fx-asheet-group{font-size:12px;font-weight:700;color:var(--text-3);padding:10px 16px 4px}
+
+/* ---- باکس دسته‌بندی: هم‌اندازه‌ی باکس بالایی (هدر) ---- */
+#top-nav{height:var(--fx-h)!important;min-height:var(--fx-h)!important;padding:0 8px!important}
+
+/* ---- باکس پین: هم‌اندازه‌ی باکس اطلاعاتِ بالایی (هدر چت) ---- */
+/* ---- هدر چت: آواتار، اسم و تعداد اعضا سمت راست‌تر (فاصله‌ی کمتر از دکمه‌ی برگشت) ---- */
+#screen-chat .hdr.chat-hdr{gap:5px!important;padding:0 6px!important}
+#screen-chat .hdr.chat-hdr .circle-btn{width:34px!important;height:34px!important;flex-shrink:0}
+#screen-chat .hdr.chat-hdr .chat-hdr-center{padding:0 0 0 8px!important;gap:8px!important}
+.pin-circle{top:calc(var(--fx-h) + var(--fx-gap))!important;left:0!important;right:0!important;height:var(--fx-h)!important;box-sizing:border-box!important;border-radius:999px!important}
+#messages.has-pins{padding-top:calc(var(--fx-h) * 2 + var(--fx-gap) + 12px)!important}
+
 `;
     document.head.appendChild(st);
+}
+
+/* ---------- دکمه‌ی پیوست: عکس/فایل/نظرسنجی/ایموجی در یک منو ---------- */
+{
+    const wrap = $('.composer-input-wrap');
+    if (wrap && !$('#btn-attach-menu')) {
+        const b = document.createElement('button');
+        b.id = 'btn-attach-menu'; b.type = 'button'; b.className = 'composer-mini';
+        b.setAttribute('aria-label', 'پیوست');
+        b.innerHTML = '<svg width="20" height="20"><use href="#i-attach"/></svg>';
+        wrap.prepend(b);
+        const item = (target, svg, label) =>
+            '<div class="sheet-item" data-aact="' + target + '"><svg width="22" height="22"><use href="#' + svg + '"/></svg>' + label + '</div>';
+        b.addEventListener('click', e => {
+            e.preventDefault(); e.stopPropagation();
+            openSheet(
+                '<div class="sheet-title">افزودن به پیام</div>' +
+                '<div class="fx-asheet-group">رسانه و فایل</div>' +
+                item('btn-photo', 'i-camera', 'عکس و فیلم') +
+                item('btn-file', 'i-file', 'فایل') +
+                '<div class="fx-asheet-group">صدا و نظرسنجی</div>' +
+                item('btn-send', 'i-mic', 'ضبط صدا') +
+                item('btn-poll', 'i-chart', 'نظرسنجی')
+            );
+            $$('#sheet-content [data-aact]').forEach(it => it.addEventListener('click', () => {
+                const target = $('#' + it.dataset.aact);
+                closeSheet();
+                setTimeout(() => { if (target) target.click(); }, 160);
+            }));
+        });
+    }
+}
+
+/* ---------- ایموجی: بیرون از منو، جای دکمه‌ی ضبط صدا ---------- */
+{
+    const comp = $('#composer'), em = $('#btn-emoji');
+    if (comp && em) comp.prepend(em);
 }
 
 /* ---------- شروع ---------- */
