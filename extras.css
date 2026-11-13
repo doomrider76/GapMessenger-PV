@@ -229,3 +229,126 @@ html[data-real] [data-info-act="edit-members"],html[data-real] [data-cact="membe
 .x-dt{padding:10px 2px;gap:7px;font-size:12.5px;border-radius:16px}
 .x-dt svg{width:24px;height:24px}
 .x-dr-ft{margin-top:0;padding:8px 0 0}.x-dr-ft div{font-size:13.5px;padding:6px 8px}
+
+/* حاشیه‌ی استوری به سبک تلگرام: حلقه‌ی سبز-آبی + فاصله‌ی تیره تا آواتار */
+.x-r{stroke-width:2.4}
+.x-ring svg,.x-ring[data-s="seen"] svg{animation:none;filter:none}
+#btn-profile-top.x-has-ring .profile-square{transform:scale(.82);transition:transform .2s}
+#screen-list .main-hdr #list-title{position:relative!important}
+#screen-list .main-hdr #list-title.x-has-st{padding-right:104px}
+.x-pill-st{position:absolute;right:6px;top:50%;transform:translateY(-50%);margin:0;gap:5px;display:flex;align-items:center}
+.x-pst{padding:2px;border-radius:11px;background:linear-gradient(180deg,#52d17c,#3a93e8);display:flex;cursor:pointer;pointer-events:auto}
+.x-pst.seen{background:var(--line-3,#666)}
+.x-pst .in{display:flex;padding:1.5px;border-radius:9px;background:#141414}
+.x-pst .avatar{width:28px;height:28px;border:none;margin:0;border-radius:7px}
+.x-dav.new,.x-sv .hd .av{background:linear-gradient(180deg,#52d17c,#3a93e8)}
+.x-dav.cur{background:#3a93e8}
+.x-dav.cur.new{background:linear-gradient(180deg,#52d17c,#3a93e8)}
+.x-dav.cur.seen{background:var(--line-3,#666)}
+.x-dav .in{background:#1a2230}
+/* کارت اکانت‌ها مثل ویراستی */
+.x-dr-card{display:block;padding:6px 10px;background:rgba(58,147,232,.14);cursor:default}
+.x-acc{display:flex;align-items:center;gap:12px;padding:8px 0;cursor:pointer}
+.x-acc+.x-acc{border-top:1px solid rgba(255,255,255,.08)}
+.x-acc:not(.cur){display:none}
+.x-dr-card.open .x-acc{display:flex}
+.x-acc .inf{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.x-acc .inf b{font-size:14.5px;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.x-acc .inf small{color:var(--text-3);font-size:12.5px;text-align:right}
+.x-acc .vf{flex-shrink:0}
+.x-dr-card .chv{transition:transform .2s;font-size:20px}
+.x-dr-card.open .chv{transform:rotate(180deg)}
+.x-dr-card{max-height:232px;overflow-y:auto;scrollbar-width:none}
+.x-dr-card::-webkit-scrollbar{display:none}
+
+/* ===== حلقه‌ی استوری دقیقاً روی لبه‌ی بیرونی مربعِ آواتار (بدون فاصله و بدون کوچک‌شدن عکس) ===== */
+#btn-profile-top.x-has-ring .profile-square{transform:none!important}
+.x-r{stroke-width:2.4}
+.x-pst{position:relative;padding:0!important;background:none!important;border-radius:9px;display:flex}
+.x-pst .in{padding:0!important;background:none!important;display:flex;border-radius:9px}
+.x-pst .avatar{width:30px!important;height:30px!important;border-radius:9px!important;border:none!important}
+.x-pst::after,.x-dav.new::after,.x-dav.seen::after,.x-sv .hd .av::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:2.4px;background:linear-gradient(180deg,#52d17c,#3a93e8);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.x-pst.seen::after,.x-dav.seen::after{background:var(--line-3,#777)}
+.x-dav{position:relative;padding:0!important;background:none!important;border-radius:15px;display:flex}
+.x-dav .in{padding:0!important;background:none!important;border-radius:15px;display:flex}
+.x-dav .avatar{border-radius:15px!important}
+.x-dav.cur:not(.new):not(.seen){background:none!important}
+.x-acc:not(.cur) .x-dav{border-radius:13px}.x-acc:not(.cur) .x-dav .avatar{border-radius:13px!important}
+.x-sv .hd .av{position:relative;padding:0!important;background:none!important;border-radius:12px}
+.x-sv .hd .av .avatar{border:none!important;border-radius:12px!important}
+/* رنگ کارت حساب‌ها مثل قبل */
+.x-dr-card{background:rgba(127,127,127,.16)!important}
+
+/* حلقه داخل خود مربع پروفایل است (هرگز بیرون نمی‌زند) */
+#top-profile-avatar{position:relative}
+.x-ring{position:absolute!important;inset:0!important;left:0!important;top:0!important;width:100%!important;height:100%!important;border-radius:inherit!important;overflow:hidden;pointer-events:none}
+.x-ring svg{position:absolute;inset:0;width:100%;height:100%}
+/* حذف لبه‌ی ریز رنگِ آواتار که از زیر حلقه بیرون می‌زد */
+#btn-profile-top.x-has-ring #top-profile-avatar{box-sizing:border-box;padding:.8px;background-clip:content-box}
+.x-pst .avatar,.x-dav .avatar,.x-sv .hd .av .avatar{box-sizing:border-box;padding:.8px;background-clip:content-box}
+/* حلقه‌ی ثابت با ماسک CSS: دقیقاً هم‌اندازه‌ی مربع پروفایل */
+.x-ring{box-sizing:border-box!important}
+.x-ring[data-s="new"],.x-ring[data-s="seen"]{padding:2.4px;background:linear-gradient(180deg,#52d17c,#3a93e8);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.x-ring[data-s="seen"]{background:var(--line-3,#777)}
+.x-ring[data-s="new"] svg,.x-ring[data-s="seen"] svg{display:none}
+@property --xa{syntax:'<angle>';initial-value:0deg;inherits:false}
+@property --xp{syntax:'<percentage>';initial-value:0%;inherits:false}
+.x-ring[data-s="up"],.x-ring[data-s="done"]{padding:2.4px;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.x-ring[data-s="up"]{background:conic-gradient(from var(--xa),#52d17c 0%,#3a93e8 22%,transparent 22%);animation:xspin .9s linear infinite}
+.x-ring[data-s="done"]{background:conic-gradient(#52d17c,#3a93e8 var(--xp),transparent var(--xp));animation:xfill .7s ease forwards}
+.x-ring[data-s="up"] svg,.x-ring[data-s="done"] svg{display:none}
+@keyframes xspin{to{--xa:360deg}}
+@keyframes xfill{from{--xp:0%}to{--xp:100%}}
+
+/* ضخامت یکسان حاشیه در همه‌جا: خط تیره‌ی نازک لبه‌ی داخلی حلقه را مشخص می‌کند */
+:root{--xrw:2.4px}
+.x-ring[data-s],.x-pst::after,.x-dav.new::after,.x-dav.seen::after,.x-sv .hd .av::after{padding:var(--xrw)!important}
+#btn-profile-top.x-has-ring #top-profile-avatar{box-shadow:inset 0 0 0 calc(var(--xrw) + 1px) rgba(0,0,0,.42)}
+.x-pst .avatar,.x-dav.new .avatar,.x-dav.seen .avatar,.x-sv .hd .av .avatar{box-shadow:inset 0 0 0 calc(var(--xrw) + 1px) rgba(0,0,0,.42)}
+/* لیست اکانت‌ها: اول فقط اکانت فعلی، با زدن روی کارت بقیه باز می‌شوند */
+.x-acc:not(.cur){display:flex!important;max-height:0;padding-top:0;padding-bottom:0;opacity:0;overflow:hidden;border-top-color:transparent;transition:max-height .25s ease,opacity .2s ease,padding .25s ease}
+.x-dr-card.open .x-acc:not(.cur){max-height:80px;padding-top:8px;padding-bottom:8px;opacity:1;border-top-color:rgba(255,255,255,.08)}
+.x-dr-card .x-acc.cur{cursor:pointer}
+/* حاشیه‌ی پروفایل بالا دقیقاً هم‌نسبت با حاشیه‌ی پنل (۲.۴ از ۴۶ ⇒ ۱.۹۵ از ۳۷) */
+#btn-profile-top .x-ring[data-s]{padding:1.95px!important}
+#btn-profile-top.x-has-ring #top-profile-avatar{box-shadow:inset 0 0 0 2.95px rgba(0,0,0,.42)}
+
+/* استوری مخاطبین: هم‌سایز پروفایل خودم و چسبیده به آن */
+.x-pill-st{right:3px!important;gap:6px!important}
+.x-pst{border-radius:12px!important}
+.x-pst .in{border-radius:12px!important}
+.x-pst .avatar{width:37px!important;height:37px!important;border-radius:12px!important}
+.x-pst::after{padding:1.95px!important}
+.x-pst .avatar{box-shadow:inset 0 0 0 2.95px rgba(0,0,0,.42)!important}
+#screen-list .main-hdr #list-title.x-has-st{padding-right:calc(var(--xn,3) * 43px + 12px)!important}
+/* بزرگ‌تر هم‌اندازه‌ی باکس پروفایل و چسبیده‌تر به آن */
+.x-pill-st{right:-3px!important}
+#screen-list .main-hdr #list-title{overflow:visible!important}
+.x-pill-st{right:-6px!important}
+.x-pst .avatar{width:37.2px!important;height:37.2px!important}
+/* پروفایل هنگام لمس/باز شدن منو تکون نخورد */
+#btn-profile-top,#btn-profile-top:active,#btn-profile-top:focus,#btn-profile-top:hover{transform:none!important;transition:none!important;animation:none!important}
+#btn-profile-top .profile-square,#btn-profile-top:active .profile-square{transition:none!important}
+.x-pst:active{transform:none}
+
+/* بدون انیمیشن مقیاس: محتوای پنل هنگام باز شدن جابه‌جا نمی‌شود (فقط محو می‌شود) */
+.x-dr{transform:none!important;transition:opacity .2s ease!important}
+
+/* ===== تیک‌های تایید (از کد جدید): سایز ثابت ۲۰px، تیک‌های زرد/سبز/شخصی کمی کوچک‌تر ===== */
+img.vf.verified-icon{width:20px!important;height:20px!important;min-width:20px!important;min-height:20px!important;max-width:20px!important;max-height:20px!important;object-fit:contain;display:inline-block;vertical-align:middle;margin:0 0 4px 0!important;flex-shrink:0;box-sizing:border-box;position:relative!important;transform:none!important;image-rendering:-webkit-optimize-contrast}
+img.vf.verified-icon.lg{width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;max-width:26px!important;max-height:26px!important;margin-bottom:0!important}
+img.vf.verified-icon[src*="blue-tick"]{top:3px}
+img.vf.verified-icon[src*="yellow-tick"],img.vf.verified-icon[src*="green-tick"],img.vf.verified-icon[src*="personal-tick"]{transform:scale(.85)!important;transform-origin:center;z-index:1}
+/* ===== استوری: بدون حاشیه‌ی مشکی هنگام آپلود + انیمیشن بهتر ===== */
+#btn-profile-top[data-xs="up"] #top-profile-avatar,#btn-profile-top[data-xs="done"] #top-profile-avatar{box-shadow:none!important;padding:0!important}
+@property --xl{syntax:'<angle>';initial-value:70deg;inherits:false}
+.x-ring[data-s="up"]{background:conic-gradient(from var(--xa),rgba(82,209,124,0) 0deg,#52d17c calc(var(--xl) * .5),#3a93e8 var(--xl),rgba(58,147,232,0) calc(var(--xl) + .5deg))!important;animation:xspin .85s linear infinite,xgrow 1.7s cubic-bezier(.3,.7,.3,1) forwards!important}
+@keyframes xgrow{from{--xl:70deg}to{--xl:330deg}}
+.x-ring[data-s="done"]{background:conic-gradient(#52d17c,#3a93e8 var(--xp),rgba(58,147,232,0) var(--xp))!important;animation:xfill .45s ease-out forwards!important}
+#btn-profile-top[data-xs="done"] #top-profile-avatar{animation:xpopav .6s ease .35s}
+@keyframes xpopav{0%{transform:scale(1);filter:none}45%{transform:scale(1.07);filter:drop-shadow(0 0 7px rgba(58,147,232,.8))}100%{transform:scale(1);filter:none}}
+.x-acc .inf b{overflow:visible!important;text-overflow:clip!important;line-height:1.5}
+.x-acc .inf{overflow:visible}
+
+/* top را فقط اسکریپت تراز می‌گذارد (نه ۳px ثابت) */
+img.vf.verified-icon[src*="blue-tick"]{top:0}
