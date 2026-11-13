@@ -798,31 +798,36 @@ function startCall(chatId, kind) {
 const DAY = 864e5, BGS = ['linear-gradient(135deg,#667eea,#764ba2)', 'linear-gradient(135deg,#f093fb,#f5576c)', 'linear-gradient(135deg,#43cea2,#185a9d)', 'linear-gradient(135deg,#fa709a,#fee140)', 'linear-gradient(135deg,#30cfd0,#330867)', 'linear-gradient(135deg,#ff9a9e,#fad0c4)', 'linear-gradient(135deg,#434343,#000)'];
 const liveStories = a => ((a.x && a.x.stories) || []).filter(s => Date.now() - s.ts < DAY);
 let stHtml = '', upl = false, uplDone = false;
-const GRAD = '<defs><linearGradient id="xg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3d77"/><stop offset=".2" stop-color="#ff9a3d"/><stop offset=".4" stop-color="#ffe14d"/><stop offset=".6" stop-color="#4dff9a"/><stop offset=".8" stop-color="#3dc8ff"/><stop offset="1" stop-color="#9a5cff"/></linearGradient></defs>';
+const GRAD = '<defs><linearGradient id="xg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#52d17c"/><stop offset="1" stop-color="#3a93e8"/></linearGradient></defs>';
 function renderStories() {
   const old = $('#x-stories'); if (old) old.remove();
   const btn = $('#btn-profile-top'), isChats = !!(btn && btn.classList.contains('profile-circle-btn'));
   const me = X(); me.stories = liveStories(state.me);
   const seen = new Set(me.storySeen);
   if (btn) {
-    let ring = $('.x-ring', btn);
-    if (!(isChats && (me.stories.length || upl || uplDone))) { if (ring) ring.remove(); btn.style.position = ''; }
+    const sq = $('#top-profile-avatar') || $('.profile-square', btn) || btn;
+    let ring = $('.x-ring', sq);
+    const allSeen = me.stories.length && me.stories.every(x => seen.has(x.id));
+    if (!(isChats && ((me.stories.length && !allSeen) || upl || uplDone))) { if (ring) ring.remove(); btn.classList.remove('x-has-ring'); delete btn.dataset.xs; }
     else {
-      const k = upl ? 'up' : uplDone ? 'done' : me.stories.every(s => seen.has(s.id)) ? 'seen' : 'new';
-      if (!ring) { ring = document.createElement('span'); ring.className = 'x-ring'; if (getComputedStyle(btn).position === 'static') btn.style.position = 'relative'; btn.appendChild(ring); }
+      const k = upl ? 'up' : uplDone ? 'done' : 'new';
+      btn.classList.add('x-has-ring'); btn.dataset.xs = k;
+      if (!ring) { ring = document.createElement('span'); ring.className = 'x-ring'; sq.appendChild(ring); }
       if (ring.dataset.s !== k) {
         ring.dataset.s = k;
-        const sq = $('.profile-square', btn) || btn, br = btn.getBoundingClientRect(), sr = sq.getBoundingClientRect();
-        const w = sr.width || 38, rx = Math.min(50, (parseFloat(getComputedStyle(sq).borderTopLeftRadius) || w / 2) / w * 100);
-        Object.assign(ring.style, { left: (sr.left - br.left) + 'px', top: (sr.top - br.top) + 'px', width: sr.width + 'px', height: sr.height + 'px', inset: 'auto', borderRadius: getComputedStyle(sq).borderTopLeftRadius });
-        ring.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${GRAD}<rect class="x-r x-r-${k}" x="2" y="2" width="96" height="96" rx="${rx}" pathLength="100"/></svg>`;
+        const w = sq.getBoundingClientRect().width || 38, ix = 1.2 / w * 100, rx = Math.min(50, (parseFloat(getComputedStyle(sq).borderTopLeftRadius) || w / 3) / w * 100);
+        ring.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${GRAD}<rect class="x-r x-r-${k}" x="${ix}" y="${ix}" width="${100 - 2 * ix}" height="${100 - 2 * ix}" rx="${Math.max(0, rx - ix)}" pathLength="100"/></svg>`;
       }
     }
   }
   const pill = $('#list-title'); if (!pill) return;
   let box = $('.x-pill-st', pill);
   if (!box) { box = document.createElement('span'); box.className = 'x-pill-st'; pill.appendChild(box); box.addEventListener('click', e => { const b = e.target.closest('[data-xs]'); const a = b && (state.accounts || []).find(x => x.id === b.dataset.xs); if (a) viewStories(a); }); }
-  const html = !isChats ? '' : (state.accounts || []).filter(a => liveStories(a).length).slice(0, 4).map(a => `<span class="x-pst ${liveStories(a).every(s => seen.has(s.id)) ? 'seen' : ''}" data-xs="${esc(a.id)}">${avatarHTML(a, 26)}</span>`).join('');
+  const newest = a => Math.max(...liveStories(a).map(x => x.ts));
+  const list3 = !isChats ? [] : (state.accounts || []).filter(a => liveStories(a).some(x => !seen.has(x.id))).sort((p, q) => newest(q) - newest(p)).slice(0, 3);
+  const html = list3.map(a => `<span class="x-pst ${liveStories(a).every(s => seen.has(s.id)) ? 'seen' : ''}" data-xs="${esc(a.id)}" title="${esc(a.name)}"><span class="in">${avatarHTML(a, 37.2)}</span></span>`).join('');
+  pill.classList.toggle('x-has-st', !!html);
+  pill.style.setProperty('--xn', String(list3.length || 1));
   if (stHtml !== html) { stHtml = html; box.innerHTML = html; }
 }
 const ago = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'همین الان' : m < 60 ? faN(m) + ' دقیقه پیش' : faN(Math.floor(m / 60)) + ' ساعت پیش'; };
@@ -919,6 +924,7 @@ function viewStories(acc, from = 0) {
 }
 wrap('renderChatList', o => function () { const r = o.apply(this, arguments); try { renderStories(); } catch (e) { console.error(e); } return r; });
 renderStories();
+{ const sq = $('#top-profile-avatar'); if (sq) new MutationObserver(() => { try { renderStories(); } catch {} }).observe(sq, { childList: true }); }
 
 
 /* ============ حالت واقعی (حذف شبیه‌سازی) ============ */
@@ -967,6 +973,7 @@ const DSVG = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
 };
 const dsvg = (k, c, w = 24) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${DSVG[k]}</svg>`;
+const bdg = a => { try { return a && a.badgeType ? ' ' + vfHTML(a.badgeType, 15) : ''; } catch { return ''; } };
 function openDrawer() {
   closeDrawer(true);
   const me = X(), has = liveStories(state.me).length, seenAll = has && liveStories(state.me).every(s => me.storySeen.includes(s.id));
@@ -975,10 +982,12 @@ function openDrawer() {
   const ov = document.createElement('div'); ov.className = 'x-dr-ov';
   ov.innerHTML = `<div class="x-dr">
     <div class="x-dr-h"><button data-d="close" aria-label="بستن">✕</button><div class="t">گپ</div><span style="width:40px"></span></div>
-    <div class="x-dr-card" data-d="accs"><span class="x-dav ${has ? (seenAll ? 'seen' : 'new') : ''}"><span class="in">${avatarHTML(state.me, 46)}</span></span>
-      <div class="inf"><b>${esc(state.me.name || 'من')}</b><small dir="ltr">${state.me.username ? '@' + esc(state.me.username) : ''}</small></div>
-      <span class="chv">${others.length ? '⌄' : ''}</span></div>
-    <div class="x-dr-accs" style="display:none">${others.map(a => `<div class="x-da" data-acc="${esc(a.id)}">${avatarHTML(a, 34)}<span>${esc(a.name)}</span></div>`).join('')}</div>
+    <div class="x-dr-card">
+      <div class="x-acc cur" data-d="accs"><span class="x-dav cur ${has ? (seenAll ? 'seen' : 'new') : ''}"><span class="in">${avatarHTML(state.me, 46)}</span></span>
+        <div class="inf"><b>${esc(state.me.name || 'من')}${bdg(state.me)}</b><small dir="ltr">${state.me.username ? '@' + esc(state.me.username) : ''}</small></div>
+        <span class="chv">${others.length ? '⌄' : ''}</span></div>
+      ${others.map(a => `<div class="x-acc" data-acc="${esc(a.id)}"><span class="x-dav"><span class="in">${avatarHTML(a, 40)}</span></span><div class="inf"><b>${esc(a.name)}${bdg(a)}</b><small dir="ltr">${a.username ? '@' + esc(a.username) : ''}</small></div></div>`).join('')}
+    </div>
     <div class="x-dr-chips"><span class="x-chip" data-d="story">${dsvg('plus', 'currentColor', 22)}افزودن استوری</span><span class="x-chip ic" data-d="mystories" title="استوری‌های من">${dsvg('clock', 'currentColor', 22)}</span></div>
     <div class="x-dr-line"></div>
     <div class="x-dr-grid">
@@ -989,6 +998,7 @@ function openDrawer() {
     <div class="x-dr-ft"><div data-d="settings">${dsvg('gear', 'currentColor', 22)}<span>تنظیمات</span></div><i></i><div data-d="theme">${dsvg('sun', 'currentColor', 22)}<span>${state.theme === 'light' ? 'تم تاریک' : 'تم روشن'}</span></div></div>
   </div>`;
   document.body.appendChild(ov);
+  { const dr = $('.x-dr', ov), r = dr.getBoundingClientRect(); ov.style.alignItems = 'flex-start'; dr.style.marginTop = Math.max(8, r.top - 20) + 'px'; }
   requestAnimationFrame(() => ov.classList.add('show'));
   const goFilter = f => { switchTab('chats'); const b = $(`#top-nav [data-filter="${f}"]`); if (b) b.click(); };
   ov.addEventListener('click', e => {
@@ -997,7 +1007,7 @@ function openDrawer() {
     if (acc) { closeDrawer(true); switchAccount(acc.dataset.acc); return; }
     const d = e.target.closest('[data-d]'); if (!d) return;
     const k = d.dataset.d;
-    if (k === 'accs') { const l = $('.x-dr-accs', ov); if (others.length) l.style.display = l.style.display === 'none' ? 'block' : 'none'; return; }
+    if (k === 'accs') { if (others.length) $('.x-dr-card', ov).classList.toggle('open'); return; }
     if (k === 'theme') { state.theme = state.theme === 'light' ? 'dark' : 'light'; if (state.themeMode === 'auto') state.themeMode = 'manual'; applyTheme(); save(); closeDrawer(); return; }
     if (k === 'real') { setReal(!S().real, false); closeDrawer(true); return; }
     closeDrawer();
@@ -1014,6 +1024,91 @@ function openDrawer() {
   });
 }
 function closeDrawer(now) { const ov = $('.x-dr-ov'); if (!ov) return; if (now) { ov.remove(); return; } ov.classList.remove('show'); setTimeout(() => ov.remove(), 220); }
+
+
+/* ============ تیک‌های تایید: سایز و جای عمودی مثل کد جدید (class: verified-icon) ============ */
+const BADGE_LETTER_CENTER = {
+  'ا': .40, 'آ': .50, 'أ': .45, 'إ': .35, 'ل': .40, 'ک': .40, 'ك': .40, 'گ': .42, 'ط': .38, 'ظ': .42,
+  'ب': .06, 'پ': 0, 'ت': .25, 'ث': .30, 'ن': .02, 'ی': -.10, 'ي': -.10, 'ئ': 0,
+  'د': .18, 'ذ': .27, 'ر': .03, 'ز': .12, 'ژ': .15, 'و': .02, 'ؤ': .10,
+  'م': -.03, 'ه': .22, 'ة': .22, 'ھ': .22,
+  'س': .08, 'ش': .17, 'ص': .10, 'ض': .18, 'ع': -.05, 'غ': 0, 'ف': .15, 'ق': .02,
+  'ج': -.12, 'چ': -.15, 'ح': -.05, 'خ': .05
+};
+function letterCenterEm(ch) {
+  if (!ch) return null;
+  if (BADGE_LETTER_CENTER[ch] !== undefined) return BADGE_LETTER_CENTER[ch];
+  if (/[a-z]/.test(ch)) return /[bdfhklt]/.test(ch) ? .35 : (/[gjpqy]/.test(ch) ? .12 : .25);
+  if (/[A-Z0-9۰-۹٠-٩]/.test(ch)) return .35;
+  return null;
+}
+function lastLetterBeforeBadge(img) {
+  let n = img.previousSibling;
+  while (n) {
+    if (n.nodeType === 1 && n.classList.contains('verified-icon')) { n = n.previousSibling; continue; }
+    let last = n; while (last.lastChild) last = last.lastChild;
+    if (last.nodeType === 1 && last.tagName === 'IMG') return { ch: '', src: n };
+    const t = (n.textContent || '').replace(/[\s\u200c\u200d\u200e\u200f]+$/, '');
+    if (t) return { ch: Array.from(t).pop(), src: n };
+    n = n.previousSibling;
+  }
+  return { ch: '', src: null };
+}
+const BADGE_LIFT_PX = 1;   // بالا/پایین‌کردن همه‌ی تیک‌ها (پیکسل): مثبت = بالاتر
+let _bcCanvas = null;
+function alignBadge(img) {
+  const { ch, src } = lastLetterBeforeBadge(img);
+  img.setAttribute('data-vc', '1');
+  if (letterCenterEm(ch) === null) return;           // ایموجی/علامت → جای پیش‌فرض
+  const holder = (src && src.nodeType === 1) ? src : img.parentElement; if (!holder) return;
+  const cs = getComputedStyle(holder), fs = parseFloat(cs.fontSize) || 16;
+  let c = letterCenterEm(ch), baseBelowCenter = fs * 0.3;
+  try {
+    _bcCanvas = _bcCanvas || document.createElement('canvas');
+    const ctx = _bcCanvas.getContext('2d');
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${fs}px ${cs.fontFamily}`;
+    const m = ctx.measureText('x');
+    if (m.fontBoundingBoxAscent) baseBelowCenter = (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
+    // وسط واقعیِ کل اسم (نه فقط حرف آخر) در همین فونت ⇒ تیک روی همه‌ی اسم‌ها هم‌تراز و ثابت می‌نشیند
+    const full = (src && src.nodeType === 1 ? src.textContent : (src && src.nodeValue) || ch).replace(/[\s\u200c\u200d\u200e\u200f]+$/, '').trim() || ch;
+    ctx.direction = /[\u0600-\u06FF]/.test(full) ? 'rtl' : 'ltr';
+    const mc = ctx.measureText(full);
+    if (mc.width > 0 && mc.actualBoundingBoxAscent !== undefined) {
+      const v = (mc.actualBoundingBoxAscent - mc.actualBoundingBoxDescent) / 2 / fs;
+      if (isFinite(v)) c = v;
+    }
+  } catch (e) {}
+  const big = img.classList.contains('lg'), h = big ? 26 : 20, mb = big ? 0 : 4;   // margin-bottom خود تیک
+  const pd = img.parentElement ? getComputedStyle(img.parentElement).display : '';
+  if (pd.includes('flex')) {
+    img.style.top = (baseBelowCenter - c * fs + mb / 2 - BADGE_LIFT_PX).toFixed(2) + 'px';
+    img.style.verticalAlign = '';
+  } else {
+    img.style.top = '';
+    img.style.verticalAlign = (c * fs - h / 2 - mb + BADGE_LIFT_PX).toFixed(2) + 'px';
+  }
+}
+function normBadge(img) {
+  if (img.classList.contains('verified-icon')) return;
+  const big = (parseInt(img.getAttribute('width'), 10) || 0) >= 24 || !!img.closest('.info-name,.profile-card');
+  img.classList.add('verified-icon'); if (big) img.classList.add('lg');
+  img.removeAttribute('width'); img.removeAttribute('height');
+}
+function alignAllBadges(root) {
+  (root || document).querySelectorAll('img.vf').forEach(normBadge);
+  (root || document).querySelectorAll('.verified-icon:not([data-vc])').forEach(alignBadge);
+}
+function realignAllBadges() {
+  document.querySelectorAll('.verified-icon[data-vc]').forEach(i => { i.removeAttribute('data-vc'); i.style.top = ''; i.style.verticalAlign = ''; });
+  alignAllBadges();
+}
+{
+  let queued = false;
+  new MutationObserver(() => { if (queued) return; queued = true; Promise.resolve().then(() => { queued = false; alignAllBadges(); }); }).observe(document.body, { childList: true, subtree: true });
+  alignAllBadges();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(realignAllBadges);
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(realignAllBadges, 200); });
+}
 
 console.log('extras.js loaded');
 })();
