@@ -768,7 +768,7 @@ wrap('renderSettings', o => function () {
     <div class="row"><span class="r-icon">${IC('mic', '🎤')}</span><span class="r-text">تبدیل گفتار به متن هنگام ضبط ویس</span><label class="switch"><input type="checkbox" id="x-stt" ${S().xstt ? 'checked' : ''}><span class="sl"></span></label></div></div>
     <div class="fx-hint">حالت واقعی: بازدید، ریکشن، رأی و کامنت ساختگی، پاسخ خودکار افراد و تنظیم دستی تعداد اعضا غیرفعال می‌شود. چت هوش مصنوعی عادی کار می‌کند.</div>
     <div class="fx-hint">اگر هنگام ضبط ویس صدا قطع می‌شود، تبدیل گفتار به متن را خاموش کن.</div>`;
-  { const sb = $('[data-act="set-badge"]', body); if (sb && !$('#x-vip', body)) sb.closest('.group').insertAdjacentHTML('beforeend', `<div class="row"><span class="r-icon">⭐</span><span class="r-text">نشان کاربر ویژه</span><label class="switch"><input type="checkbox" id="x-vip" ${state.me.vip ? 'checked' : ''}><span class="sl"></span></label></div>`); }
+  { const sb = $('[data-act="set-badge"]', body); if (sb && !$('#x-vip', body)) sb.closest('.group').insertAdjacentHTML('beforeend', `<div class="row x-viprow"><span class="r-icon x-vipic"><img src="vipgold.png" alt="" onerror="this.replaceWith('⭐')"></span><span class="r-text">نشان کاربر ویژه</span><label class="switch"><input type="checkbox" id="x-vip" ${state.me.vip ? 'checked' : ''}><span class="sl"></span></label></div>`); }
   const a2 = $$('.section-title', body).find(x => x.textContent.includes('ظاهر و برنامه'));
   a2 ? a2.before(...w2.childNodes) : body.append(...w2.childNodes);
 });
@@ -1199,7 +1199,31 @@ function alignBadge(img) {
     img.style.verticalAlign = (c * fs - h / 2 - mb + BADGE_LIFT_PX).toFixed(2) + 'px';
   }
 }
+const _trimCache = new Map();
+function trimBadgeImg(img) {
+  if (img.dataset.trim) return; img.dataset.trim = '1';
+  const run = () => {
+    const src = img.currentSrc || img.src;
+    if (_trimCache.has(src)) { const u = _trimCache.get(src); if (u && img.src !== u) img.src = u; return; }
+    try {
+      const w = img.naturalWidth, h = img.naturalHeight; if (!w || !h) return;
+      const k = Math.min(1, 256 / Math.max(w, h)), cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+      const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+      const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, cw, ch);
+      const d = cx.getImageData(0, 0, cw, ch).data; let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) if (d[(y * cw + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (x1 < 0) return;
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      if (bw >= cw * .97 && bh >= ch * .97) { _trimCache.set(src, null); return; }     // حاشیه‌ی شفاف ندارد
+      const out = document.createElement('canvas'); out.width = bw; out.height = bh;
+      out.getContext('2d').drawImage(cv, x0, y0, bw, bh, 0, 0, bw, bh);
+      const url = out.toDataURL('image/png'); _trimCache.set(src, url); img.src = url;   // حاشیه‌ی شفاف بریده می‌شود ⇒ همه‌ی نشان‌ها هم‌اندازه
+    } catch (e) { _trimCache.set(src, null); }
+  };
+  if (img.complete && img.naturalWidth) run(); else img.addEventListener('load', run, { once: true });
+}
 function normBadge(img) {
+  trimBadgeImg(img);
   if (img.classList.contains('verified-icon')) return;
   const big = (parseInt(img.getAttribute('width'), 10) || 0) >= 24 || !!img.closest('.info-name,.profile-card');
   img.classList.add('verified-icon'); if (big) img.classList.add('lg');
@@ -1274,8 +1298,9 @@ wrap('renderAvatarPicker', o => function () {
 wrap('applyAvatarChange', o => function () { const r = o.apply(this, arguments); try { if (avatarTargetType === 'me' && avatarOverlay.classList.contains('show')) renderAvatarPicker(); } catch {} return r; });
 
 /* --- کاور: فقط کاربر ویژه؛ بقیه گرادینت آبیِ کم‌رنگ خاکستری --- */
-function applyCover(el, acc, mine) {
+function applyCover(el, acc, mine, hint) {
   if (!el) return;
+  el.removeAttribute('data-hint'); if (hint) el.setAttribute('data-hint', hint);
   el.classList.remove('x-defcover', 'x-gcover'); el.style.removeProperty('--xg');
   const hero = el.closest('.profile-card,.info-hero'), isInfo = el.classList.contains('info-cover');
   const vip = isVipAcc(acc);
@@ -1290,18 +1315,30 @@ function applyCover(el, acc, mine) {
   el.classList.add('x-defcover'); full(); el.style.backgroundImage = 'none'; el.textContent = '';
 }
 const accOfEntity = e => (!e ? null : (e === state.me || (e.username && norm(e.username) === norm(state.me.username))) ? state.me : acctByUser(e.username));
+const canEditInfo = c => isAdminMe(c) ? can(c, 'info') : !!(c.permissions && c.permissions.editInfo === 'all');
+const isGC = c => !!c && (c.type === 'group' || c.type === 'channel');
+const ownerAcc = c => {
+  const o = c && c.owner;
+  if (!o || (o.username && norm(o.username) === norm(state.me.username)) || o.name === state.me.name) return state.me;
+  return (o.username && acctByUser(o.username)) || (state.accounts || []).find(a => a.name === o.name) || null;
+};
+const gcVip = c => isVipAcc(ownerAcc(c));                                  // کاور فقط اگر مالک، کاربر ویژه باشد
+const canSetGcCover = c => isOwner(c) && isVipAcc(state.me);               // و فقط خودِ مالکِ ویژه می‌تواند بگذارد
+const gcCoverSrc = c => ({ vip: gcVip(c), coverPhoto: c.coverPhoto, coverGrad: c.coverGrad });
+function coverRefresh(ent) { if (ent === state.me) renderSettings(); else { renderInfo(); renderChatList(); } }
 function fixCovers() {
   try {
     applyCover($('#my-cover-btn'), state.me, true);
     const c = getChat(infoChatId);
     if (c && c.type === 'private') applyCover($('#info-body .info-cover'), accOfEntity(c), false);
+    else if (isGC(c)) applyCover($('#info-body .info-cover'), gcCoverSrc(c), false, canSetGcCover(c) ? 'افزودن کاور' : '');
   } catch (e) { console.error(e); }
 }
 wrap('renderSettings', o => function () { const r = o.apply(this, arguments); fixCovers(); return r; });
 wrap('renderInfo', o => function () { const r = o.apply(this, arguments); fixCovers(); return r; });
 wrap('openProfilePreview', o => function (u) {
   const r = o.apply(this, arguments);
-  try { const f = findByUsername(u); if (f && f.entity && f.entity.type !== 'group' && f.entity.type !== 'channel' && !f.entity.isPublic) applyCover($('#profile-body .info-cover'), accOfEntity(f.entity), false); } catch {}
+  try { const f = findByUsername(u); if (f && f.entity) { const en = f.entity; if (isGC(en)) applyCover($('#profile-body .info-cover'), gcCoverSrc(en), false); else applyCover($('#profile-body .info-cover'), accOfEntity(en), false); } } catch {}
   return r;
 });
 wrap('handleInfoAction', o => function (act, c) {
@@ -1328,22 +1365,22 @@ function myCoverSheet() {
     setTimeout(() => {
       if (k === 'photo') coverPick();
       else if (k === 'grad') coverGradSheet();
-      else { me.coverPhoto = null; me.coverGrad = null; save(); renderSettings(); toast('کاور حذف شد', 'success'); }
+      else { me.coverPhoto = null; me.coverGrad = null; save(); coverRefresh(me); toast('کاور حذف شد', 'success'); }
     }, 160);
   }));
 }
-function coverPick() {
+function coverPick(ent = state.me) {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = () => {
     const f = inp.files[0]; if (!f) return;
     const url = URL.createObjectURL(f), im = new Image();
-    im.onload = () => coverCrop(im);
+    im.onload = () => coverCrop(im, ent);
     im.onerror = () => toast('این عکس پشتیبانی نمی‌شود', 'error');
     im.src = url;
   };
   inp.click();
 }
-function coverCrop(img) {
+function coverCrop(img, ent = state.me) {
   const RW = 1080, RH = 380, MINW = 540, MINH = 190, nw = img.naturalWidth, nh = img.naturalHeight;
   if (nw < MINW || nh < MINH) { toast(`عکس کوچک است؛ حداقل ${faN(MINW)}×${faN(MINH)} پیکسل لازم است`, 'error'); return; }
   $$('.x-ov').forEach(o => o.remove());
@@ -1382,8 +1419,8 @@ function coverCrop(img) {
     clamp(); const rh = rw * RH / RW, ow = Math.min(RW, Math.round(rw)), oh = Math.round(ow * RH / RW);
     const cv = document.createElement('canvas'); cv.width = ow; cv.height = oh;
     cv.getContext('2d').drawImage(img, cx - rw / 2, cy - rh / 2, rw, rh, 0, 0, ow, oh);
-    state.me.coverPhoto = cv.toDataURL('image/jpeg', .86); state.me.coverGrad = null;
-    save(); ov.remove(); renderSettings(); toast('کاور ذخیره شد', 'success');
+    ent.coverPhoto = cv.toDataURL('image/jpeg', .86); ent.coverGrad = null;
+    save(); ov.remove(); coverRefresh(ent); toast('کاور ذخیره شد', 'success');
   });
 }
 function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
@@ -1414,8 +1451,8 @@ function comboGrads(P) {
   const sets = [[a, b], [b, c], [a, c], [L(a), D(b)], [D(a), L(b)], [a, b, c], [c, a, d], [L(c), D(d)]];
   return [...new Set(sets.map(cs => `linear-gradient(135deg,${cs.join(',')})`))];
 }
-async function coverGradSheet() {
-  const me = state.me, pal = await avatarPalette(me), mine = comboGrads(pal);
+async function coverGradSheet(ent = state.me) {
+  const me = ent, pal = await avatarPalette(me), mine = comboGrads(pal);
   let cur = me.coverGrad || mine[0], c1 = pal[0] || '#4aa3e8', c2 = pal[1] || '#8b5cf6', ang = 135;
   const sw = g => `<i data-g="${esc(g)}" style="background:${g}"></i>`;
   openSheet(`<div class="sheet-title">گرادینت کاور</div>
@@ -1432,7 +1469,7 @@ async function coverGradSheet() {
   $$('#sheet-content .x-gsw i').forEach(i => i.addEventListener('click', () => show(i.dataset.g)));
   $('#x-c1').addEventListener('input', custom); $('#x-c2').addEventListener('input', custom);
   $$('#sheet-content .ang button').forEach(b => b.addEventListener('click', () => { ang = +b.dataset.a; $$('#sheet-content .ang button').forEach(x => x.classList.toggle('on', x === b)); custom(); }));
-  $('#x-gsave').addEventListener('click', () => { me.coverGrad = cur; me.coverPhoto = null; save(); closeSheet(); renderSettings(); toast('کاور ذخیره شد', 'success'); });
+  $('#x-gsave').addEventListener('click', () => { me.coverGrad = cur; me.coverPhoto = null; save(); closeSheet(); coverRefresh(me); toast('کاور ذخیره شد', 'success'); });
 }
 
 
@@ -1548,6 +1585,29 @@ wrap('notifyIncoming', o => function (chat, text) {
   try { if (S().notifications !== false && chat && !chat.muted && !(document.visibilityState === 'visible' && activeChatId === chat.id && $('#screen-chat').classList.contains('open'))) showBanner(chat, text); } catch {}
   return o.apply(this, arguments);
 });
+
+
+function chatCoverSheet(c) {
+  const has = !!(c.coverPhoto || c.coverGrad);
+  openSheet(`<div class="sheet-title">کاور ${c.type === 'channel' ? 'کانال' : 'گروه'}</div>
+    <div class="x-cvprev" style="background:${c.coverGrad && !c.coverPhoto ? c.coverGrad : ''}">${c.coverPhoto ? `<img src="${esc(c.coverPhoto)}" alt="">` : (c.coverGrad ? '' : '<span>کاوری تنظیم نشده</span>')}</div>
+    <div class="sheet-item" data-xcc="photo">${IC('image', '🖼')}انتخاب عکس برای کاور<small style="margin-right:auto;color:var(--text-3)">تا ۱۰۸۰×۳۸۰</small></div>
+    <div class="sheet-item" data-xcc="grad">${IC('palette', '🎨')}گرادینت کاور (پیشنهادی از رنگ عکس)</div>
+    ${has ? `<div class="sheet-item danger" data-xcc="rm">${IC('trash', '🗑')}حذف کاور</div>` : ''}`);
+  const sh = $('#sheet-content'); if (sh) sh.classList.add('x-glass');
+  $$('#sheet-content [data-xcc]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.xcc; closeSheet();
+    setTimeout(() => { if (k === 'photo') coverPick(c); else if (k === 'grad') coverGradSheet(c); else { c.coverPhoto = null; c.coverGrad = null; save(); coverRefresh(c); toast('کاور حذف شد', 'success'); } }, 160);
+  }));
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('#info-body [data-info-act="edit-cover"], #info-body .info-cover');
+  if (!el) return;
+  const c = getChat(infoChatId); if (!isGC(c)) return;
+  e.stopPropagation(); e.preventDefault();
+  if (canSetGcCover(c)) { chatCoverSheet(c); return; }
+  if (canEditInfo(c)) toast('فقط مالکِ کاربر ویژه می‌تواند برای ' + (c.type === 'channel' ? 'کانال' : 'گروه') + ' کاور بگذارد', 'info');
+}, true);
 
 console.log('extras.js loaded');
 })();
