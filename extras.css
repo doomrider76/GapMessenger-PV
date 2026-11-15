@@ -540,9 +540,35 @@ img.vf.verified-icon.vipgold.lg{width:28px!important;height:28px!important;min-w
 .info-hero.has-cover .info-cover.x-gcover::after,.info-hero.has-cover .info-cover.x-defcover::after{display:block!important}
 
 /* ===== تیک‌ها و نشان ویژه با طرح جدید (ابری سه‌بعدی ۸۹۰×۸۳۲ ⇒ نسبت ۱.۰۷) ===== */
-:root{--vf-w:16px;--vf-h:15px;--vf-wl:21px;--vf-hl:19.6px}
+:root{--vf-w:17px;--vf-h:15.9px;--vf-wl:22px;--vf-hl:20.6px}
 img.vf.verified-icon,img.vf.verified-icon.vipgold{width:var(--vf-w)!important;height:var(--vf-h)!important;min-width:var(--vf-w)!important;min-height:var(--vf-h)!important;max-width:var(--vf-w)!important;max-height:var(--vf-h)!important;object-fit:contain;transform:none!important;margin:0 0 4px -3px!important}
 img.vf.verified-icon.lg,img.vf.verified-icon.vipgold.lg{width:var(--vf-wl)!important;height:var(--vf-hl)!important;min-width:var(--vf-wl)!important;min-height:var(--vf-hl)!important;max-width:var(--vf-wl)!important;max-height:var(--vf-hl)!important;margin:0 0 0 -3px!important}
 img.vf.verified-icon.vipgold{margin-left:-4px!important}
 img.vf.verified-icon.vipgold.lg{margin-left:-4px!important}
 img.vf.verified-icon[src*="yellow-tick"],img.vf.verified-icon[src*="green-tick"],img.vf.verified-icon[src*="personal-tick"],img.vf.verified-icon[src*="blue-tick"]{transform:none!important}
+
+/* راهنمای «افزودن کاور» برای ادمین گروه/کانال روی کاور پیش‌فرض */
+.info-cover.x-defcover[data-hint]::before{content:attr(data-hint);position:absolute;top:12px;right:12px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.35);backdrop-filter:blur(8px);padding:5px 12px;border-radius:12px;pointer-events:none}
+
+/* ردیف نشان کاربر ویژه در تنظیمات */
+.x-viprow{min-height:64px}
+.x-viprow .r-text{display:flex;flex-direction:column;gap:3px;line-height:1.5}
+.x-viprow .r-text b{font-size:15px}
+.x-viprow .r-text small{font-size:11.5px;color:var(--text-3);font-weight:400;line-height:1.6}
+.x-cri.vip{width:40px;height:40px;border-radius:13px;background:linear-gradient(135deg,#fff3c4 0%,#fbbf24 55%,#f59e0b 100%)!important;box-shadow:0 6px 16px rgba(245,158,11,.35),inset 0 1px 0 rgba(255,255,255,.6);font-size:22px;flex-shrink:0}
+.x-cri.vip img{width:28px;height:28px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(120,53,15,.4))}
+
+/* ردیف نشان ویژه: مینیمال و هم‌شکل بقیه‌ی ردیف‌ها */
+.x-viprow{min-height:0!important}
+.x-viprow .r-text{display:block!important;font-size:inherit}
+.x-viprow .r-icon.x-vipic{background:linear-gradient(135deg,#fde68a,#f59e0b)!important;box-shadow:none!important;display:flex;align-items:center;justify-content:center}
+.x-viprow .r-icon.x-vipic img{width:60%;height:60%;object-fit:contain;filter:none}
+/* مرکز اعلان‌ها: خودِ باکس بلورِ قوی و کم‌شفاف تا محتوا واضح باشد */
+#sheet-content.x-glass.x-nsheet{background:rgba(22,28,39,.9)!important;background:color-mix(in srgb,var(--surface-2,#161c27) 90%,transparent)!important;backdrop-filter:blur(34px) saturate(170%)!important;-webkit-backdrop-filter:blur(34px) saturate(170%)!important}
+html[data-theme="light"] #sheet-content.x-glass.x-nsheet{background:rgba(255,255,255,.9)!important}
+#sheet-overlay:has(.x-nsheet){backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.x-nsheet .fx-n{background:rgba(127,127,127,.14)}
+
+/* اگر تصویر نشان ویژه باز هم کوچک‌تر/بزرگ‌تر دیده شد، این عدد را عوض کن (۱ = هم‌اندازه‌ی تیک) */
+:root{--vip-scale:1}
+img.vf.verified-icon.vipgold{transform:scale(var(--vip-scale))!important;transform-origin:center}
