@@ -1158,33 +1158,30 @@ function lastLetterBeforeBadge(img) {
     if (n.nodeType === 1 && n.classList.contains('verified-icon')) { n = n.previousSibling; continue; }
     let last = n; while (last.lastChild) last = last.lastChild;
     if (last.nodeType === 1 && last.tagName === 'IMG') return { ch: '', src: n };
-    const t = (n.textContent || '').replace(/[\s\u200c\u200d\u200e\u200f]+$/, '');
+    const t = (n.textContent || '').replace(/[\s\u200c\u200d\u200e\u200f\u064B-\u065F\u0670]+$/, '');
     if (t) return { ch: Array.from(t).pop(), src: n };
     n = n.previousSibling;
   }
   return { ch: '', src: null };
 }
-const BADGE_LIFT_PX = 1;   // بالا/پایین‌کردن همه‌ی تیک‌ها (پیکسل): مثبت = بالاتر
+const BADGE_LIFT_PX = 0;
+const BADGE_CENTER_EM = 0.25;   // ارتفاع مرکز نشان از خط پایه (بر حسب em)؛ برای همه‌ی حروف فارسی/انگلیسی/عدد یکسان. بیشتر = بالاتر   // بالا/پایین‌کردن همه‌ی تیک‌ها (پیکسل): مثبت = بالاتر
 let _bcCanvas = null;
 const _measCache = new Map();
 function calcBadge(img, memo) {
   const { ch, src } = lastLetterBeforeBadge(img);
-  if (letterCenterEm(ch) === null) return null;           // ایموجی/علامت → جای پیش‌فرض
   const holder = (src && src.nodeType === 1) ? src : img.parentElement; if (!holder) return null;
   let f = memo.get(holder);
   if (!f) { const cs = getComputedStyle(holder); f = { fs: parseFloat(cs.fontSize) || 16, font: `${cs.fontStyle} ${cs.fontWeight} ${parseFloat(cs.fontSize) || 16}px ${cs.fontFamily}` }; memo.set(holder, f); }
   const fs = f.fs, full = (src && src.nodeType === 1 ? src.textContent : (src && src.nodeValue) || ch).replace(/[\s\u200c\u200d\u200e\u200f]+$/, '').trim() || ch;
-  const key = f.font + '|' + full;
+  const key = f.font;
   let m = _measCache.get(key);
   if (!m) {
-    m = { c: letterCenterEm(ch), bbc: fs * 0.3 };
+    m = { c: BADGE_CENTER_EM, bbc: fs * 0.3 };
     try {
       _bcCanvas = _bcCanvas || document.createElement('canvas');
       const ctx = _bcCanvas.getContext('2d'); ctx.font = f.font;
       const mx = ctx.measureText('x'); if (mx.fontBoundingBoxAscent) m.bbc = (mx.fontBoundingBoxAscent - mx.fontBoundingBoxDescent) / 2;
-      ctx.direction = /[\u0600-\u06FF]/.test(full) ? 'rtl' : 'ltr';
-      const mc = ctx.measureText(full);
-      if (mc.width > 0 && mc.actualBoundingBoxAscent !== undefined) { const v = (mc.actualBoundingBoxAscent - mc.actualBoundingBoxDescent) / 2 / fs; if (isFinite(v)) m.c = v; }
     } catch (e) {}
     if (_measCache.size > 800) _measCache.clear();
     _measCache.set(key, m);
@@ -1650,4 +1647,41 @@ function centerTitle() {
 }
 
 console.log('extras.js loaded');
+})();
+
+/* ============ توضیح نشان‌ها: با زدن روی هر تیک/نشان، باکس معرفی آن باز می‌شود ============ */
+(function badgeInfoPopup() {
+  // متن توضیحات را از همین‌جا می‌توانی عوض کنی (کلید = عنوان نشان)
+  const BADGE_INFO = {
+    'نشان افراد سرشناس': 'این نشان به افراد سرشناس و شناخته‌شده مثل هنرمندان، ورزشکاران، نویسندگان و چهره‌های رسانه‌ای و اثرگذار داده می‌شود که هویت‌شان تایید شده است.',
+    'نشان سازمانی': 'این نشان برای سازمان‌ها، نهادها و مجموعه‌های رسمی مثل شرکت‌ها، رسانه‌ها، دانشگاه‌ها و ارگان‌ها است که اصالت حساب‌شان تایید شده است.',
+    'نشان تجاری': 'این نشان به کسب‌وکارها، فروشگاه‌ها و برندهای تجاری تایید‌شده تعلق می‌گیرد تا کاربران مطمئن باشند با حساب اصلی و معتبر آن برند در ارتباط‌اند.',
+    'نشان شخصی': 'این نشان برای حساب‌های شخصی تایید‌شده است؛ یعنی کاربرانی که هویت‌شان بررسی و تایید شده، حتی اگر چهره‌ی سرشناسی نباشند.',
+    'کاربر ویژه': 'این نشان مخصوص کاربران ویژه‌ی گپ است. کاربران ویژه به امکانات اختصاصی مثل گذاشتن کاور روی پروفایل دسترسی دارند (و مالک ویژه‌ی گروه یا کانال می‌تواند برای آن کاور بگذارد).'
+  };
+  let box = null;
+  function close() { if (box) { box.remove(); box = null; } }
+  function open(img, title) {
+    close();
+    box = document.createElement('div');
+    box.className = 'x-binfo';
+    box.innerHTML = '<div class="x-binfo-card" role="dialog" aria-modal="true">' +
+      '<img class="x-binfo-ic" alt="">' +
+      '<div class="x-binfo-t"></div><div class="x-binfo-d"></div>' +
+      '<button type="button" class="x-binfo-ok">متوجه شدم</button></div>';
+    box.querySelector('.x-binfo-ic').src = img.currentSrc || img.src;
+    box.querySelector('.x-binfo-t').textContent = title;
+    box.querySelector('.x-binfo-d').textContent = BADGE_INFO[title];
+    box.addEventListener('click', e => { if (e.target === box || e.target.closest('.x-binfo-ok')) close(); });
+    document.body.appendChild(box);
+  }
+  document.addEventListener('click', e => {
+    const img = e.target && e.target.closest ? e.target.closest('img.vf') : null;
+    if (!img || img.closest('.sheet-item')) return;      // داخل لیست انتخاب نشان، فقط انتخاب انجام شود
+    const title = (img.getAttribute('alt') || img.getAttribute('title') || '').trim();
+    if (!BADGE_INFO[title]) return;
+    e.preventDefault(); e.stopPropagation();
+    open(img, title);
+  }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 })();
