@@ -392,7 +392,7 @@ wrap('openSheet', o => function () {
   const r = o.apply(this, arguments);
   try {
     const box = $('#sheet-content'), c = getChat(activeChatId);
-    if (box && /^\s*اعلان‌ها/.test(($('.sheet-title', box) || {}).textContent || '') && box.querySelector('.fx-n, .fx-empty')) box.classList.add('x-glass', 'x-nsheet');
+    if (box && /^\s*اعلان‌ها/.test(($('.sheet-title', box) || {}).textContent || '') && box.querySelector('.fx-n, .fx-empty')) box.classList.add('x-nsheet');
     if (box && c && box.querySelector('[data-cact="search"]') && !box.querySelector('[data-xh]')) {
       const clear = $('[data-cact="clear"]', box);
       const put = (label, ic, fn) => { const d = mkItem(label, ic, fn); d.dataset.xh = '1'; clear ? clear.before(d) : box.appendChild(d); };
@@ -1082,8 +1082,7 @@ const DSVG = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
 };
 const dsvg = (k, c, w = 24) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${DSVG[k]}</svg>`;
-const VIP_IMG = '<img class="vf verified-icon vipgold" src="vipgold.png" alt="کاربر ویژه" title="کاربر ویژه">';
-const bdg = a => { try { return (a && a.badgeType ? ' ' + vfHTML(a.badgeType, 15) : '') + (isVipAcc(a) ? VIP_IMG : ''); } catch { return ''; } };
+const bdg = a => { try { return (a && a.badgeType ? ' ' + vfHTML(a.badgeType, 15) : '') + (isVipAcc(a) ? vipImg() : ''); } catch { return ''; } };
 function openDrawer() {
   closeDrawer(true);
   const me = X(), has = liveStories(state.me).length, seenAll = has && liveStories(state.me).every(s => me.storySeen.includes(s.id));
@@ -1167,84 +1166,107 @@ function lastLetterBeforeBadge(img) {
 }
 const BADGE_LIFT_PX = 1;   // بالا/پایین‌کردن همه‌ی تیک‌ها (پیکسل): مثبت = بالاتر
 let _bcCanvas = null;
-function alignBadge(img) {
+const _measCache = new Map();
+function calcBadge(img, memo) {
   const { ch, src } = lastLetterBeforeBadge(img);
-  img.setAttribute('data-vc', '1');
-  if (letterCenterEm(ch) === null) return;           // ایموجی/علامت → جای پیش‌فرض
-  const holder = (src && src.nodeType === 1) ? src : img.parentElement; if (!holder) return;
-  const cs = getComputedStyle(holder), fs = parseFloat(cs.fontSize) || 16;
-  let c = letterCenterEm(ch), baseBelowCenter = fs * 0.3;
-  try {
-    _bcCanvas = _bcCanvas || document.createElement('canvas');
-    const ctx = _bcCanvas.getContext('2d');
-    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${fs}px ${cs.fontFamily}`;
-    const m = ctx.measureText('x');
-    if (m.fontBoundingBoxAscent) baseBelowCenter = (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
-    // وسط واقعیِ کل اسم (نه فقط حرف آخر) در همین فونت ⇒ تیک روی همه‌ی اسم‌ها هم‌تراز و ثابت می‌نشیند
-    const full = (src && src.nodeType === 1 ? src.textContent : (src && src.nodeValue) || ch).replace(/[\s\u200c\u200d\u200e\u200f]+$/, '').trim() || ch;
-    ctx.direction = /[\u0600-\u06FF]/.test(full) ? 'rtl' : 'ltr';
-    const mc = ctx.measureText(full);
-    if (mc.width > 0 && mc.actualBoundingBoxAscent !== undefined) {
-      const v = (mc.actualBoundingBoxAscent - mc.actualBoundingBoxDescent) / 2 / fs;
-      if (isFinite(v)) c = v;
-    }
-  } catch (e) {}
-  const ics = getComputedStyle(img), h = parseFloat(ics.height) || 20, mb = parseFloat(ics.marginBottom) || 0;   // اندازه و margin-bottom خودِ نشان
-  const pd = img.parentElement ? getComputedStyle(img.parentElement).display : '';
-  if (pd.includes('flex')) {
-    img.style.top = (baseBelowCenter - c * fs + mb / 2 - BADGE_LIFT_PX).toFixed(2) + 'px';
-    img.style.verticalAlign = '';
-  } else {
-    img.style.top = '';
-    img.style.verticalAlign = (c * fs - h / 2 - mb + BADGE_LIFT_PX).toFixed(2) + 'px';
-  }
-}
-const _trimCache = new Map();
-function trimBadgeImg(img) {
-  if (img.dataset.trim) return; img.dataset.trim = '1';
-  const run = () => {
-    const src = img.currentSrc || img.src;
-    if (_trimCache.has(src)) { const u = _trimCache.get(src); if (u && img.src !== u) img.src = u; return; }
+  if (letterCenterEm(ch) === null) return null;           // ایموجی/علامت → جای پیش‌فرض
+  const holder = (src && src.nodeType === 1) ? src : img.parentElement; if (!holder) return null;
+  let f = memo.get(holder);
+  if (!f) { const cs = getComputedStyle(holder); f = { fs: parseFloat(cs.fontSize) || 16, font: `${cs.fontStyle} ${cs.fontWeight} ${parseFloat(cs.fontSize) || 16}px ${cs.fontFamily}` }; memo.set(holder, f); }
+  const fs = f.fs, full = (src && src.nodeType === 1 ? src.textContent : (src && src.nodeValue) || ch).replace(/[\s\u200c\u200d\u200e\u200f]+$/, '').trim() || ch;
+  const key = f.font + '|' + full;
+  let m = _measCache.get(key);
+  if (!m) {
+    m = { c: letterCenterEm(ch), bbc: fs * 0.3 };
     try {
-      const w = img.naturalWidth, h = img.naturalHeight; if (!w || !h) return;
-      const k = Math.min(1, 256 / Math.max(w, h)), cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
-      const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
-      const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, cw, ch);
-      const d = cx.getImageData(0, 0, cw, ch).data; let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
-      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) if (d[(y * cw + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-      if (x1 < 0) return;
-      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
-      if (bw >= cw * .97 && bh >= ch * .97) { _trimCache.set(src, null); return; }     // حاشیه‌ی شفاف ندارد
-      const out = document.createElement('canvas'); out.width = bw; out.height = bh;
-      out.getContext('2d').drawImage(cv, x0, y0, bw, bh, 0, 0, bw, bh);
-      const url = out.toDataURL('image/png'); _trimCache.set(src, url); img.src = url;   // حاشیه‌ی شفاف بریده می‌شود ⇒ همه‌ی نشان‌ها هم‌اندازه
-    } catch (e) { _trimCache.set(src, null); }
-  };
-  if (img.complete && img.naturalWidth) run(); else img.addEventListener('load', run, { once: true });
+      _bcCanvas = _bcCanvas || document.createElement('canvas');
+      const ctx = _bcCanvas.getContext('2d'); ctx.font = f.font;
+      const mx = ctx.measureText('x'); if (mx.fontBoundingBoxAscent) m.bbc = (mx.fontBoundingBoxAscent - mx.fontBoundingBoxDescent) / 2;
+      ctx.direction = /[\u0600-\u06FF]/.test(full) ? 'rtl' : 'ltr';
+      const mc = ctx.measureText(full);
+      if (mc.width > 0 && mc.actualBoundingBoxAscent !== undefined) { const v = (mc.actualBoundingBoxAscent - mc.actualBoundingBoxDescent) / 2 / fs; if (isFinite(v)) m.c = v; }
+    } catch (e) {}
+    if (_measCache.size > 800) _measCache.clear();
+    _measCache.set(key, m);
+  }
+  const ics = getComputedStyle(img), h = parseFloat(ics.height) || 20, mb = parseFloat(ics.marginBottom) || 0;
+  const pe = img.parentElement; let flex = false;
+  if (pe) { flex = memo.get(pe); if (flex === undefined) { flex = getComputedStyle(pe).display.includes('flex'); memo.set(pe, flex); } }
+  return flex
+    ? { img, top: (m.bbc - m.c * fs + mb / 2 - BADGE_LIFT_PX).toFixed(2) + 'px', va: '' }
+    : { img, top: '', va: (m.c * fs - h / 2 - mb + BADGE_LIFT_PX).toFixed(2) + 'px' };
 }
 function normBadge(img) {
-  trimBadgeImg(img);
   if (img.classList.contains('verified-icon')) return;
   const big = (parseInt(img.getAttribute('width'), 10) || 0) >= 24 || !!img.closest('.info-name,.profile-card');
   img.classList.add('verified-icon'); if (big) img.classList.add('lg');
   img.removeAttribute('width'); img.removeAttribute('height');
+  img.loading = 'eager'; img.decoding = 'async';
 }
-function alignAllBadges(root) {
-  (root || document).querySelectorAll('img.vf').forEach(normBadge);
-  (root || document).querySelectorAll('.verified-icon:not([data-vc])').forEach(alignBadge);
+function alignBadges(list) {
+  list.forEach(normBadge);
+  const todo = list.filter(i => !i.hasAttribute('data-vc')), memo = new Map();
+  const res = todo.map(i => calcBadge(i, memo));                  // اول همه‌ی خواندن‌ها
+  todo.forEach(i => i.setAttribute('data-vc', '1'));
+  res.forEach(r => { if (r) { r.img.style.top = r.top; r.img.style.verticalAlign = r.va; } });   // بعد همه‌ی نوشتن‌ها (بدون layout thrashing)
 }
+function alignAllBadges(root) { alignBadges([...(root || document).querySelectorAll('img.vf')]); }
 function realignAllBadges() {
   document.querySelectorAll('.verified-icon[data-vc]').forEach(i => { i.removeAttribute('data-vc'); i.style.top = ''; i.style.verticalAlign = ''; });
-  alignAllBadges();
+  _measCache.clear(); alignAllBadges();
 }
 {
-  let queued = false;
-  new MutationObserver(() => { if (queued) return; queued = true; Promise.resolve().then(() => { queued = false; alignAllBadges(); }); }).observe(document.body, { childList: true, subtree: true });
+  const pend = new Set(); let queued = false;
+  new MutationObserver(ms => {
+    for (const m of ms) for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.tagName === 'IMG' && n.classList.contains('vf')) pend.add(n);
+      else if (n.querySelector) n.querySelectorAll('img.vf').forEach(i => pend.add(i));
+    }
+    if (pend.size && !queued) { queued = true; Promise.resolve().then(() => { queued = false; const l = [...pend].filter(i => i.isConnected); pend.clear(); if (l.length) alignBadges(l); }); }
+  }).observe(document.body, { childList: true, subtree: true });
   alignAllBadges();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(realignAllBadges);
   let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(realignAllBadges, 200); });
 }
 
+/* ============ بهینه‌سازی تصویر نشان‌ها: یک‌بار کوچک و برش‌خورده، بعد استفاده‌ی همه‌جا ============ */
+let vipSrc = 'vipgold.png';
+const vipImg = () => `<img class="vf verified-icon vipgold" src="${vipSrc}" alt="کاربر ویژه" title="کاربر ویژه">`;
+const _prepP = new Map();
+function prepImg(src) {
+  if (_prepP.has(src)) return _prepP.get(src);
+  const p = new Promise(res => {
+    const im = new Image(); im.decoding = 'async';
+    im.onload = () => {
+      try {
+        const w = im.naturalWidth, h = im.naturalHeight; if (!w || !h) return res(null);
+        const k = Math.min(1, 96 / Math.max(w, h)), cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+        const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+        const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0, cw, ch);
+        const d = cx.getImageData(0, 0, cw, ch).data; let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+        for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) if (d[(y * cw + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (x1 < 0) return res(null);
+        const bw = x1 - x0 + 1, bh = y1 - y0 + 1, out = document.createElement('canvas'); out.width = bw; out.height = bh;
+        out.getContext('2d').drawImage(cv, x0, y0, bw, bh, 0, 0, bw, bh);
+        out.toBlob(b => res(b ? URL.createObjectURL(b) : null), 'image/png');
+      } catch (e) { res(null); }   // مثلاً file:// ⇒ بدون بهینه‌سازی، تصویر اصلی می‌ماند
+    };
+    im.onerror = () => res(null); im.src = src;
+  });
+  _prepP.set(src, p); return p;
+}
+(async function prepBadges() {
+  const orig = {}; const jobs = [];
+  Object.keys(BADGES).forEach(k => { const b = BADGES[k]; if (b && b.src && !/^(blob|data):/.test(b.src)) { orig[b.src] = k; jobs.push(prepImg(b.src).then(u => { if (u) { b.optSrc = u; } })); } });
+  jobs.push(prepImg('vipgold.png').then(u => { if (u) vipSrc = u; }));
+  await Promise.all(jobs);
+  Object.keys(BADGES).forEach(k => { const b = BADGES[k]; if (b && b.optSrc) { b.origSrc = b.src; b.src = b.optSrc; } });
+  document.querySelectorAll('img.vf').forEach(i => {
+    const o = i.getAttribute('src'); if (!o) return;
+    const k = orig[o]; if (k && BADGES[k].optSrc) i.src = BADGES[k].optSrc; else if (o === 'vipgold.png' && vipSrc !== o) i.src = vipSrc;
+  });
+})();
 
 /* ============ شبیه‌سازی هوشمند بازدید/واکنش/پاسخ استوری (در «حالت واقعی» خاموش است) ============ */
 const SIM_NAMES = ['سارا', 'علی', 'مینا', 'رضا', 'نیلوفر', 'کیان', 'مهسا', 'آرش', 'هانیه', 'پارسا', 'نگار', 'سینا', 'ترانه', 'بهراد'];
@@ -1480,19 +1502,19 @@ const chatEntVip = c => !!(c && c.type === 'private' && (c.vip || isVipAcc(accOf
 function addVip(el, on) {
   if (!el) return;
   const cur = el.querySelector(':scope > img.vipgold');
-  if (on && !cur) el.insertAdjacentHTML('beforeend', VIP_IMG);
+  if (on && !cur) el.insertAdjacentHTML('beforeend', vipImg());
   else if (!on && cur) cur.remove();
 }
 function decorateVip() {
   try {
     migrateVip();
-    $$('#chat-list .chat-item').forEach(it => { const c = getChat(it.dataset.id); addVip($('.ci-name', it), chatEntVip(c)); });
+    { const mp = new Map(state.chats.map(c => [c.id, c])); $$('#chat-list .chat-item').forEach(it => { addVip($('.ci-name', it), chatEntVip(mp.get(it.dataset.id))); }); }
     const ac = getChat(activeChatId); if (ac) addVip($('.chat-hdr-name'), chatEntVip(ac));
     const ic = getChat(infoChatId); if (ic) addVip($('#info-body .info-name'), chatEntVip(ic));
     addVip($('#settings-body .profile-card .pn'), isVipAcc(state.me));
   } catch (e) { console.error(e); }
 }
-['renderChatList', 'renderChatHeader', 'renderInfo', 'renderSettings'].forEach(n => wrap(n, o => function () { const r = o.apply(this, arguments); decorateVip(); return r; }));
+['renderChatList', 'renderChatHeader', 'renderInfo'].forEach(n => wrap(n, o => function () { const r = o.apply(this, arguments); decorateVip(); return r; }));
 wrap('openProfilePreview', o => function (u) {
   const r = o.apply(this, arguments);
   try { const f = findByUsername(u); if (f && f.entity) addVip($('#profile-body .info-name'), !!(f.entity.vip || isVipAcc(accOfEntity(f.entity)))); } catch {}
@@ -1608,6 +1630,24 @@ document.addEventListener('click', e => {
   if (canSetGcCover(c)) { chatCoverSheet(c); return; }
   if (canEditInfo(c)) toast('فقط مالکِ کاربر ویژه می‌تواند برای ' + (c.type === 'channel' ? 'کانال' : 'گروه') + ' کاور بگذارد', 'info');
 }, true);
+
+
+/* ============ نوشته‌ی «گپ» دقیقاً وسط باکس بالا ============ */
+function centerTitle() {
+  const t = $('#screen-list .main-hdr #list-title .brand-text'), h = $('#screen-list .main-hdr'); if (!t || !h) return;
+  t.style.display = 'inline-block'; t.style.transform = '';
+  const hr = h.getBoundingClientRect(), tr = t.getBoundingClientRect(); if (!hr.width || !tr.width) return;
+  const d = (hr.left + hr.width / 2) - (tr.left + tr.width / 2);
+  t.style.transform = Math.abs(d) > .4 ? `translateX(${d.toFixed(1)}px)` : '';
+}
+{
+  let q = false; const run = () => { if (q) return; q = true; requestAnimationFrame(() => { q = false; centerTitle(); }); };
+  const lt = $('#list-title'); if (lt) new MutationObserver(m => { if (m.some(x => x.target && x.target.closest && !x.target.closest('.x-pill-st'))) run(); }).observe(lt, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] });
+  addEventListener('resize', run); run();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(run);
+  wrap('renderChatList', o => function () { const r = o.apply(this, arguments); run(); return r; });
+  wrap('renderSettings', o => function () { const r = o.apply(this, arguments); run(); return r; });
+}
 
 console.log('extras.js loaded');
 })();
