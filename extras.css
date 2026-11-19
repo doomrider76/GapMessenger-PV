@@ -564,9 +564,6 @@ img.vf.verified-icon[src*="yellow-tick"],img.vf.verified-icon[src*="green-tick"]
 .x-viprow .r-icon.x-vipic{background:linear-gradient(135deg,#fde68a,#f59e0b)!important;box-shadow:none!important;display:flex;align-items:center;justify-content:center}
 .x-viprow .r-icon.x-vipic img{width:60%;height:60%;object-fit:contain;filter:none}
 /* مرکز اعلان‌ها: خودِ باکس بلورِ قوی و کم‌شفاف تا محتوا واضح باشد */
-#sheet-content.x-glass.x-nsheet{background:rgba(22,28,39,.9)!important;background:color-mix(in srgb,var(--surface-2,#161c27) 90%,transparent)!important;backdrop-filter:blur(34px) saturate(170%)!important;-webkit-backdrop-filter:blur(34px) saturate(170%)!important}
-html[data-theme="light"] #sheet-content.x-glass.x-nsheet{background:rgba(255,255,255,.9)!important}
-#sheet-overlay:has(.x-nsheet){backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .x-nsheet .fx-n{background:rgba(127,127,127,.14)}
 
 /* اگر تصویر نشان ویژه باز هم کوچک‌تر/بزرگ‌تر دیده شد، این عدد را عوض کن (۱ = هم‌اندازه‌ی تیک) */
