@@ -1,4 +1,4 @@
-const CACHE = 'GapApps-v1.1.3'; // نسخه کش با نسخه برنامه یکسان شد
+const CACHE = 'GapApps-v1.1.4'; // نسخه کش با نسخه برنامه یکسان شد
 const ASSETS = [
   './',
   './index.html',
@@ -13,7 +13,8 @@ const ASSETS = [
   './blue-tick.png',
   './yellow-tick.png',
   './green-tick.png',
-  './personal-tick.png'
+  './personal-tick.png',
+  './vipgold.png'
 ];
 
 self.addEventListener('install', e => {
