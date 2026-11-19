@@ -569,3 +569,35 @@ img.vf.verified-icon[src*="yellow-tick"],img.vf.verified-icon[src*="green-tick"]
 /* اگر تصویر نشان ویژه باز هم کوچک‌تر/بزرگ‌تر دیده شد، این عدد را عوض کن (۱ = هم‌اندازه‌ی تیک) */
 :root{--vip-scale:1}
 img.vf.verified-icon.vipgold{transform:scale(var(--vip-scale))!important;transform-origin:center}
+
+/* ===== باکس تایپ پایین: کوچک‌تر از نظر عرض =====
+   عدد --composer-shrink را زیاد کنی باکس باریک‌تر می‌شود (هر طرف همین مقدار) */
+:root{--composer-shrink:14px}
+.composer-input-wrap{margin-inline:var(--composer-shrink)}
+
+/* ===== نشان‌ها و تیک‌ها: همه هم‌اندازه‌ی تیک زرد (نسبت ۱.۰۴، نه کوچک نه بزرگ) =====
+   معمولی ۱۶px، بزرگ (اسم داخل پروفایل/اطلاعات) ۲۱px */
+:root{--vf-w:16px;--vf-h:15.4px;--vf-wl:21px;--vf-hl:20.2px}
+
+/* ===== بالاتر آوردن همه‌ی نشان‌ها (برای هر حرف، عدد و ایموجی کنار اسم) =====
+   عدد --vf-up را زیاد کنی بالاتر می‌رود، کم کنی پایین‌تر (۰ = دقیقاً وسط حرف آخر اسم؛ جای نشان را خود جاوااسکریپت برای هر حرف حساب می‌کند) */
+:root{--vf-up:0px}
+img.vf.verified-icon{transform:translateY(calc(-1 * var(--vf-up)))!important}
+img.vf.verified-icon.vipgold{transform:translateY(calc(-1 * var(--vf-up))) scale(var(--vip-scale))!important}
+
+/* ===== باکس توضیح نشان‌ها ===== */
+img.vf.verified-icon{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sheet-item img.vf.verified-icon{cursor:inherit}
+.x-binfo{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);animation:xbi-fade .15s ease-out}
+.x-binfo-card{width:100%;max-width:320px;background:var(--bg);color:var(--text);border:1px solid var(--line-3);border-radius:22px;padding:22px 20px 16px;text-align:center;direction:rtl;box-shadow:0 18px 50px rgba(0,0,0,.45);animation:xbi-pop .18s ease-out}
+.x-binfo-ic{width:64px;height:64px;object-fit:contain;display:block;margin:0 auto 10px}
+.x-binfo-t{font-size:17px;font-weight:800;margin-bottom:8px}
+.x-binfo-d{font-size:13.5px;line-height:1.9;color:var(--text-2);margin-bottom:16px}
+.x-binfo-ok{width:100%;border:none;border-radius:14px;padding:12px;font:inherit;font-size:14.5px;font-weight:700;background:var(--surface-3);color:var(--text);cursor:pointer}
+.x-binfo-ok:active{transform:scale(.97)}
+@keyframes xbi-fade{from{opacity:0}to{opacity:1}}
+@keyframes xbi-pop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* ===== یکسان‌سازی نهایی: نشان کاربر ویژه دقیقاً مثل بقیه‌ی تیک‌ها (هم اندازه، هم حاشیه) ===== */
+img.vf.verified-icon.vipgold{margin:0 0 4px -3px!important}
+img.vf.verified-icon.vipgold.lg{margin:0 0 0 -3px!important}
