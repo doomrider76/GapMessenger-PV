@@ -1194,9 +1194,12 @@ function calcBadge(img, memo) {
     : { img, top: '', va: (m.c * fs - h / 2 - mb + BADGE_LIFT_PX).toFixed(2) + 'px' };
 }
 function normBadge(img) {
-  if (img.classList.contains('verified-icon')) return;
-  const big = (parseInt(img.getAttribute('width'), 10) || 0) >= 24 || !!img.closest('.info-name,.profile-card');
-  img.classList.add('verified-icon'); if (big) img.classList.add('lg');
+  const isVip = img.classList.contains('vipgold');
+  if (img.classList.contains('verified-icon') && !isVip) return;
+  // نشان ویژه از اول کلاس verified-icon دارد و قبلاً از این تابع زود برمی‌گشت، پس هیچ‌وقت کلاس lg (اندازه‌ی بزرگ) نمی‌گرفت
+  const big = (parseInt(img.getAttribute('width'), 10) || 0) >= 24 || !!img.closest('.info-name,.profile-card,.pn');
+  img.classList.add('verified-icon'); img.classList.toggle('lg', big);
+  if (isVip) return;
   img.removeAttribute('width'); img.removeAttribute('height');
   img.loading = 'eager'; img.decoding = 'async';
 }
@@ -1696,4 +1699,164 @@ console.log('extras.js loaded');
     open(img, title);
   }, true);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+})();
+
+
+/* ============ طراحی جدید پنل‌ها: منوی سه‌خط بالای چت + پنل اطلاعات کانال/گروه/مخاطب ============ */
+(function modernPanels() {
+  /* ---------- ۱) منوی سه‌خط بالای چت: هدر + دکمه‌های سریع + بخش‌های دسته‌بندی‌شده ---------- */
+  const MENU_SEC = [
+    { id: 'content', t: 'ارتباط و محتوا', col: ['#60a5fa', '#3b82f6'] },
+    { id: 'look',    t: 'ظاهر و اطلاعات', col: ['#a78bfa', '#8b5cf6'] },
+    { id: 'manage',  t: 'مدیریت',          col: ['#34d399', '#10b981'] },
+    { id: 'mod',     t: 'اخطار و کنترل',   col: ['#fbbf24', '#f59e0b'] },
+    { id: 'danger',  t: 'پاکسازی و حذف',   col: ['#f87171', '#ef4444'] }
+  ];
+  const TILE_COL = [['#60a5fa', '#3b82f6'], ['#a78bfa', '#8b5cf6'], ['#34d399', '#10b981'], ['#fbbf24', '#f59e0b'], ['#f472b6', '#ec4899']];
+  const catOf = el => {
+    const k = el.dataset.cact, tx = (el.textContent || '').trim();
+    if (k) {
+      if (['search', 'info', 'mute', 'pin'].includes(k)) return 'tile';
+      if (['avatar', 'wallpaper', 'cover', 'desc', 'rename', 'verified'].includes(k)) return 'look';
+      if (['members', 'toggle-comments', 'toggle-sign'].includes(k)) return 'manage';
+      if (['warn', 'set-warner', 'ban'].includes(k)) return 'mod';
+      if (['clear', 'delete'].includes(k)) return 'danger';
+      return 'look';
+    }
+    if (el.dataset.xh) return tx.startsWith('رسانه') ? 'tile' : 'content';
+    return 'look';
+  };
+  const tileRank = el => ({ search: 0, info: 1, mute: 3, pin: 4 }[el.dataset.cact] ?? 2);   // رسانه‌ها وسط
+  const tileLabel = el => {
+    const k = el.dataset.cact, tx = (el.textContent || '').trim();
+    if (k === 'search') return 'جستجو';
+    if (k === 'info') return 'اطلاعات';
+    if (k === 'mute') return tx.includes('فعال') ? 'اعلان' : 'بی‌صدا';
+    if (k === 'pin') return tx.includes('برداشتن') ? 'برداشتن' : 'سنجاق';
+    return 'رسانه';
+  };
+  const wrapIc = (el, col) => {
+    const ic = el.firstElementChild; if (!ic || ic.classList.contains('x-mic')) return;
+    const w = document.createElement('span'); w.className = 'x-mic';
+    if (col) w.style.background = `linear-gradient(135deg,${col[0]},${col[1]})`;
+    el.insertBefore(w, ic); w.appendChild(ic);
+  };
+  function buildMenu(box, c) {
+    const items = [...box.querySelectorAll(':scope > .sheet-item')];
+    if (!items.length) return;
+    const g = { tile: [] }; MENU_SEC.forEach(s => { g[s.id] = []; });
+    items.forEach(el => g[catOf(el)].push(el));
+
+    const kind = c.type === 'channel' ? 'کانال' : c.type === 'group' ? 'گروه' : c.type === 'ai' ? 'دستیار هوشمند' : c.type === 'saved' ? 'پیام‌های ذخیره‌شده' : 'گفتگوی خصوصی';
+    const sub = (c.type === 'channel' || c.type === 'group') ? `${kind} • ${faN(c.members || 0)} عضو` : kind;
+    let av = ''; try { const r = avatarHTML(c, 46); if (typeof r === 'string') av = r; } catch {}
+    const head = document.createElement('div'); head.className = 'x-mh';
+    head.innerHTML = `<div class="x-mh-av">${av || esc((c.name || '?').trim().charAt(0))}</div><div class="x-mh-t"><b>${esc(c.name || '')}</b><small>${sub}</small></div>`;
+
+    const frag = [head];
+    if (g.tile.length) {
+      const tiles = document.createElement('div'); tiles.className = 'x-tiles';
+      g.tile.sort((a, b) => tileRank(a) - tileRank(b)).forEach((el, i) => {
+        const label = tileLabel(el);
+        wrapIc(el, TILE_COL[i % TILE_COL.length]);
+        [...el.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); });
+        const sp = document.createElement('span'); sp.className = 'x-tl'; sp.textContent = label; el.appendChild(sp);
+        tiles.appendChild(el);
+      });
+      frag.push(tiles);
+    }
+    MENU_SEC.forEach(s => {
+      if (!g[s.id].length) return;
+      const sec = document.createElement('div'); sec.className = 'x-msec';
+      sec.innerHTML = `<div class="x-mt">${s.t}</div><div class="x-mcard"></div>`;
+      const card = sec.lastElementChild;
+      g[s.id].forEach(el => { wrapIc(el, s.col); card.appendChild(el); });
+      frag.push(sec);
+    });
+    const old = $('.sheet-title', box); if (old) old.remove();
+    box.prepend(...frag.slice(0, 1));
+    frag.slice(1).forEach(n => box.appendChild(n));
+  }
+  wrap('openSheet', o => function () {
+    const box = $('#sheet-content'); if (box) box.classList.remove('x-menu');
+    const r = o.apply(this, arguments);
+    try {
+      const c = getChat(activeChatId);
+      if (box && c && box.querySelector(':scope > [data-cact="search"]') && box.querySelector(':scope > [data-cact="info"]')) { buildMenu(box, c); box.classList.add('x-menu'); }
+    } catch (e) { console.error(e); }
+    return r;
+  });
+
+  /* ---------- ۲) پنل اطلاعات (کانال / گروه / مخاطب): دکمه‌های سریع + تب‌های دسته‌بندی‌شده ---------- */
+  const TABS = [{ id: 'ov', t: 'نمای کلی' }, { id: 'set', t: 'تنظیمات' }, { id: 'mem', t: 'اعضا' }, { id: 'more', t: 'بیشتر' }];
+  const tabOfTitle = t => {
+    t = (t || '').trim();
+    if (/^تنظیمات|^مجوزها/.test(t)) return 'set';
+    if (/^اعضا/.test(t)) return 'mem';
+    if (/^عملیات/.test(t)) return 'more';
+    return 'ov';
+  };
+  let curTab = 'ov', curChat = null;
+  function buildInfo(c) {
+    const body = $('#info-body'); if (!body || body.querySelector('.x-itabs')) return;
+    const hero = body.querySelector(':scope > .info-hero'); if (!hero) return;
+
+    // آمار (تعداد اعضا، تاریخ عضویت) کنار هم به‌صورت چیپ
+    const stats = [...hero.querySelectorAll(':scope > .info-stat')];
+    if (stats.length) { const row = document.createElement('div'); row.className = 'x-statrow'; stats[0].before(row); stats.forEach(s => row.appendChild(s)); }
+
+    // تقسیم محتوا به پنل‌ها
+    const panes = {}; TABS.forEach(t => { const d = document.createElement('div'); d.className = 'x-pane'; d.dataset.pane = t.id; panes[t.id] = d; });
+    let cur = 'ov';
+    [...body.children].filter(n => n !== hero).forEach(n => {
+      if (n.classList.contains('section-title')) { cur = tabOfTitle(n.textContent); panes[cur].appendChild(n); return; }
+      if (n.classList.contains('profile-actions')) { panes.ov.appendChild(n); return; }
+      if (n.classList.contains('empty')) { panes.more.appendChild(n); return; }
+      panes[cur].appendChild(n);
+    });
+
+    // دکمه‌های سریع (از همان ردیف‌های موجود کار می‌کنند)
+    const bar = document.createElement('div'); bar.className = 'x-qa-bar';
+    const addQA = (el, ic, label) => {
+      if (!el) return;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'x-qa';
+      b.innerHTML = `<span class="x-qi">${ic}</span><span class="x-ql">${label}</span>`;
+      b.addEventListener('click', () => el.click());
+      bar.appendChild(b);
+    };
+    const f = s => body.querySelector(s);
+    const mute = f('[data-info-act="toggle-mute"]'), muted = mute && mute.textContent.includes('فعال کردن');
+    addQA(mute, IC(muted ? 'bell' : 'bell-off', '🔔'), muted ? 'اعلان' : 'بی‌صدا');
+    addQA(f('[data-xinfo="media"]'), IC('image', '🖼'), 'رسانه');
+    addQA(f('[data-xinfo="call-voice"]'), IC('phone', '📞'), 'تماس');
+    addQA(f('[data-xinfo="invite"]'), IC('globe', '🔗'), 'دعوت');
+    addQA(f('[data-info-act="edit-name"]'), IC('edit', '✏️'), 'ویرایش');
+    addQA(f('[data-xinfo="stats"]'), IC('chart', '📊'), 'آمار');
+
+    // نوار تب‌ها (فقط تب‌هایی که محتوا دارند)
+    const used = TABS.filter(t => panes[t.id].children.length);
+    if (curChat !== c.id) { curChat = c.id; curTab = 'ov'; }
+    if (!used.some(t => t.id === curTab)) curTab = used.length ? used[0].id : 'ov';
+    const tabs = document.createElement('div'); tabs.className = 'x-itabs'; tabs.setAttribute('role', 'tablist');
+    const show = id => {
+      curTab = id;
+      tabs.querySelectorAll('.x-itab').forEach(b => b.classList.toggle('on', b.dataset.tab === id));
+      Object.keys(panes).forEach(k => panes[k].classList.toggle('on', k === id));
+    };
+    used.forEach(t => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'x-itab'; b.dataset.tab = t.id; b.textContent = t.t;
+      b.addEventListener('click', () => show(t.id)); tabs.appendChild(b);
+    });
+    if (bar.children.length) hero.after(bar);
+    (bar.children.length ? bar : hero).after(tabs);
+    let last = tabs;
+    used.forEach(t => { last.after(panes[t.id]); last = panes[t.id]; });
+    if (used.length < 2) tabs.style.display = 'none';
+    show(curTab);
+  }
+  wrap('renderInfo', o => function () {
+    const r = o.apply(this, arguments);
+    try { const c = getChat(infoChatId); if (c) buildInfo(c); } catch (e) { console.error(e); }
+    return r;
+  });
 })();
