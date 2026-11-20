@@ -570,10 +570,11 @@ img.vf.verified-icon[src*="yellow-tick"],img.vf.verified-icon[src*="green-tick"]
 :root{--vip-scale:1}
 img.vf.verified-icon.vipgold{transform:scale(var(--vip-scale))!important;transform-origin:center}
 
-/* ===== باکس تایپ پایین: کوچک‌تر از نظر عرض =====
-   عدد --composer-shrink را زیاد کنی باکس باریک‌تر می‌شود (هر طرف همین مقدار) */
-:root{--composer-shrink:14px}
-.composer-input-wrap{margin-inline:var(--composer-shrink)}
+/* ===== باکس تایپ پایین: فاصله از لبه‌های چپ و راست گوشی =====
+   (پس‌زمینه‌ی شیشه‌ای کل نوار را features.js با left:0 / right:0 چسبانده به لبه‌ها؛ اینجا با #composer از آن قوی‌تر می‌شود)
+   --composer-edge را زیاد کنی باکس باریک‌تر و از لبه‌ها دورتر می‌شود */
+:root{--composer-edge:14px}
+html body #composer.composer{left:var(--composer-edge)!important;right:var(--composer-edge)!important}
 
 /* ===== نشان‌ها و تیک‌ها: همه هم‌اندازه‌ی تیک زرد (نسبت ۱.۰۴، نه کوچک نه بزرگ) =====
    معمولی ۱۶px، بزرگ (اسم داخل پروفایل/اطلاعات) ۲۱px */
@@ -601,3 +602,65 @@ img.vf.verified-icon{cursor:pointer;-webkit-tap-highlight-color:transparent}
 /* ===== یکسان‌سازی نهایی: نشان کاربر ویژه دقیقاً مثل بقیه‌ی تیک‌ها (هم اندازه، هم حاشیه) ===== */
 img.vf.verified-icon.vipgold{margin:0 0 4px -3px!important}
 img.vf.verified-icon.vipgold.lg{margin:0 0 0 -3px!important}
+
+
+/* ================= طراحی جدید پنل‌ها ================= */
+
+/* ---------- منوی سه‌خط بالای چت ---------- */
+#sheet-content.x-menu{padding:12px 14px 24px;border-radius:30px 30px 0 0;background:linear-gradient(180deg,#1c1c20,#121214)}
+html[data-theme="light"] #sheet-content.x-menu{background:linear-gradient(180deg,#fff,#f2f2f7)}
+.x-mh{display:flex;align-items:center;gap:12px;padding:4px 4px 14px}
+.x-mh-av{width:48px;height:48px;border-radius:16px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--surface-3);font-weight:800;font-size:18px}
+.x-mh-av > *{flex-shrink:0}
+.x-mh-t{min-width:0}
+.x-mh-t b{display:block;font-size:17px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.x-mh-t small{display:block;margin-top:2px;font-size:12.5px;color:var(--text-3)}
+.x-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(58px,1fr));gap:8px}
+#sheet-content.x-menu .x-tiles .sheet-item{flex-direction:column;justify-content:center;gap:8px;margin:0;padding:12px 2px 10px;border-radius:18px;background:var(--surface-2);border:1px solid var(--line-2);font-size:12px;font-weight:600;color:var(--text-2);text-align:center}
+#sheet-content.x-menu .x-tiles .sheet-item:active{background:var(--surface-3);transform:scale(.96)}
+.x-msec{margin-top:16px}
+.x-mt{font-size:12px;font-weight:700;color:var(--text-3);padding:0 8px 7px}
+.x-mcard{border-radius:22px;background:var(--surface-2);border:1px solid var(--line-2);overflow:hidden}
+#sheet-content.x-menu .x-mcard .sheet-item{margin:0;border-radius:0;padding:11px 14px;gap:12px;font-size:15px;font-weight:600;border-bottom:1px solid var(--line)}
+#sheet-content.x-menu .x-mcard .sheet-item:last-child{border-bottom:none}
+#sheet-content.x-menu .x-mcard .sheet-item::after{content:"‹";margin-inline-start:auto;color:var(--text-4);font-size:20px;line-height:1}
+.x-mic{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;background:linear-gradient(135deg,#60a5fa,#3b82f6);box-shadow:0 4px 10px rgba(0,0,0,.18)}
+.x-mic svg{fill:#fff!important;width:18px;height:18px;opacity:1}
+.x-mic span{color:#fff}
+.x-tiles .x-mic{width:38px;height:38px;border-radius:13px}
+.x-tl{line-height:1.3}
+
+/* ---------- پنل اطلاعات (کانال / گروه / مخاطب) ---------- */
+#info-body .x-statrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+#info-body .x-statrow .info-stat{padding:7px 14px;font-size:13px;border-radius:999px}
+.x-qa-bar{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px;margin:14px 0 6px}
+.x-qa{display:flex;flex-direction:column;align-items:center;gap:8px;padding:13px 4px 10px;border-radius:20px;border:1px solid var(--line-2);background:var(--surface-2);color:var(--text);font:inherit;cursor:pointer;transition:transform .12s,background .15s;-webkit-tap-highlight-color:transparent}
+.x-qa:active{transform:scale(.95);background:var(--surface-3)}
+.x-qa .x-qi{width:40px;height:40px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#60a5fa,#3b82f6);box-shadow:0 6px 14px rgba(59,130,246,.28)}
+.x-qa:nth-child(2) .x-qi{background:linear-gradient(135deg,#a78bfa,#8b5cf6);box-shadow:0 6px 14px rgba(139,92,246,.28)}
+.x-qa:nth-child(3) .x-qi{background:linear-gradient(135deg,#34d399,#10b981);box-shadow:0 6px 14px rgba(16,185,129,.28)}
+.x-qa:nth-child(4) .x-qi{background:linear-gradient(135deg,#fbbf24,#f59e0b);box-shadow:0 6px 14px rgba(245,158,11,.28)}
+.x-qa:nth-child(5) .x-qi{background:linear-gradient(135deg,#f472b6,#ec4899);box-shadow:0 6px 14px rgba(236,72,153,.28)}
+.x-qa .x-qi svg{fill:#fff;width:20px;height:20px}
+.x-qa .x-ql{font-size:12px;font-weight:700;color:var(--text-2)}
+
+.x-itabs{display:flex;gap:4px;padding:4px;margin:12px 0 6px;border-radius:18px;background:var(--surface-2);border:1px solid var(--line-2);position:sticky;top:calc(var(--hdr-h,56px) + 2px);z-index:5;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.x-itab{flex:1;border:none;background:transparent;color:var(--text-3);font:inherit;font-size:13.5px;font-weight:700;padding:9px 4px;border-radius:14px;cursor:pointer;transition:background .18s,color .18s;-webkit-tap-highlight-color:transparent}
+.x-itab.on{background:var(--surface-3);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.22)}
+.x-pane{display:none}
+.x-pane.on{display:block;animation:xpIn .22s ease-out}
+@keyframes xpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+#info-body .x-pane .section-title{padding:16px 6px 8px;display:flex;align-items:center;gap:8px;font-size:13px;letter-spacing:0;text-transform:none;color:var(--text-2)}
+#info-body .x-pane .section-title::before{content:"";width:4px;height:14px;border-radius:2px;background:linear-gradient(180deg,#60a5fa,#8b5cf6)}
+#info-body .x-pane .group{margin:0 0 6px;border-radius:22px;background:var(--surface-2);border:1px solid var(--line-2)}
+#info-body .x-pane .row{padding:12px 14px;min-height:54px;gap:12px}
+#info-body .x-pane .row .r-icon{width:36px;height:36px;border-radius:12px}
+#info-body .x-pane .row:nth-child(6n+1) .r-icon:not([style]):not(.purple){background:linear-gradient(135deg,#60a5fa,#3b82f6)}
+#info-body .x-pane .row:nth-child(6n+2) .r-icon:not([style]):not(.purple){background:linear-gradient(135deg,#a78bfa,#8b5cf6)}
+#info-body .x-pane .row:nth-child(6n+3) .r-icon:not([style]):not(.purple){background:linear-gradient(135deg,#34d399,#10b981)}
+#info-body .x-pane .row:nth-child(6n+4) .r-icon:not([style]):not(.purple){background:linear-gradient(135deg,#fbbf24,#f59e0b)}
+#info-body .x-pane .row:nth-child(6n+5) .r-icon:not([style]):not(.purple){background:linear-gradient(135deg,#f472b6,#ec4899)}
+#info-body .x-pane .row:nth-child(6n) .r-icon:not([style]):not(.purple){background:linear-gradient(135deg,#2dd4bf,#14b8a6)}
+#info-body .x-pane .row[data-info-act="delete"]{background:rgba(239,68,68,.07)}
+#info-body .x-pane .profile-actions{margin:8px 0 6px}
