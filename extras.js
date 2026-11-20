@@ -1518,6 +1518,18 @@ wrap('openProfilePreview', o => function (u) {
   return r;
 });
 
+// نشان «کاربر ویژه» همان لحظه‌ی اول هم مثل تیک‌ها نشان داده شود.
+// (قبلاً اولین رندر لیست چت‌ها قبل از لود شدن extras.js انجام می‌شد و نشان تا رندر بعدی/باز شدن پروفایل نمی‌آمد)
+decorateVip();
+(function vipAlways() {
+  let q = false;
+  const run = () => { q = false; decorateVip(); };
+  const mo = new MutationObserver(() => { if (!q) { q = true; requestAnimationFrame(run); } });
+  ['#chat-list', '#info-body', '#settings-body'].forEach(sel => { const el = $(sel); if (el) mo.observe(el, { childList: true, subtree: true }); });
+  document.addEventListener('DOMContentLoaded', decorateVip);
+  addEventListener('load', decorateVip);
+})();
+
 /* ============ پیام‌های ذخیره‌شده: از پنل/تنظیمات باز می‌شود، بدون «آخرین بازدید» ============ */
 function openSaved() {
   let c = state.chats.find(x => x.type === 'saved');
