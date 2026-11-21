@@ -612,7 +612,7 @@ function statsSheet(c) {
   const best = per.indexOf(Math.max(...per));
   const wd = d => d.toLocaleDateString('fa-IR', { weekday: 'short' });
   const eTop = Object.entries(emo).sort((p, q) => q[1] - p[1]).slice(0, 5), em = Math.max(1, ...eTop.map(x => x[1]));
-  const kpi = (ic, col, v, l) => `<div class="k"><i style="background:${col}">${ic}</i><b>${v}</b><span>${l}</span></div>`;
+  const kpi = (ic, col, v, l) => `<div class="k"><b>${v}</b><span>${l}</span></div>`;
   openSheet(`<div class="sheet-title">آمار کانال</div>
     <div class="x-sth">${avatarHTML(c, 46)}<div><b>${esc(c.name)}</b><small>${faN(c.members || 0)} عضو</small></div><span class="x-sr">${faN(er)}٪ تعامل</span></div>
     <div class="x-sk">
@@ -628,7 +628,7 @@ function statsSheet(c) {
     ${eTop.length ? `<div class="x-sc2"><h4>پرطرفدارترین واکنش‌ها</h4>${eTop.map(([e, n]) => `<div class="x-er"><span class="e">${e}</span><span class="b"><i style="width:${Math.round(n / em * 100)}%"></i></span><span class="n">${faN(n)}</span></div>`).join('')}</div>` : ''}
     <div class="x-sc2"><h4>پست‌های ۷ روز گذشته${posts.length ? ` <small>· پرکارترین روز: ${wd(days[best])}</small>` : ''}</h4><div class="x-bars2 s">${per.map((n, i) => `<div class="c"><span class="v">${faN(n)}</span><i style="height:${Math.max(5, Math.round(n / mp * 100))}%"></i><span class="l">${esc(wd(days[i]))}</span></div>`).join('')}</div></div>
     <div class="fx-hint" style="padding:6px 18px 14px">${R ? 'حالت واقعی روشن است؛ بازدیدها فقط از داده‌ی واقعی شمرده می‌شوند.' : 'آمار از داده‌های همین دستگاه محاسبه می‌شود.'}</div>`);
-  const sh = $('#sheet-content'); if (sh) sh.classList.add('x-glass');
+  const sh = $('#sheet-content'); if (sh) sh.classList.add('x-glass', 'x-stats');
 }
 
 /* ============ ردیف‌های جدید صفحه‌ی اطلاعات ============ */
@@ -641,7 +641,8 @@ wrap('renderInfo', o => function () {
   const gc = c.type === 'group' || c.type === 'channel';
   let rows = row('media', IC('image', '🖼'), 'رسانه‌ها، فایل‌ها و لینک‌ها');
   const np = getPinned(c).length; if (np) rows += row('pins', IC('pin', '📌'), 'پیام‌های سنجاق‌شده', faN(np));
-  if (c.type === 'private') rows += row('call-voice', IC('phone', '📞'), 'تماس صوتی') + row('call-video', IC('camera', '📹'), 'تماس تصویری') + row('vip', '⭐', 'نشان کاربر ویژه', chatEntVip(c) ? 'روشن' : 'خاموش');
+  if (c.type === 'private') rows += row('call-voice', IC('phone', '📞'), 'تماس صوتی') + row('call-video', IC('camera', '📹'), 'تماس تصویری');
+  if (c.type !== 'ai' && c.type !== 'saved') rows += row('vip', '⭐', 'نشان ' + vipWord(c), chatEntVip(c) ? 'روشن' : 'خاموش');
   if (gc) rows += row('invite', IC('globe', '🔗'), 'لینک دعوت') + row('admins', IC('verified', '🛡'), 'مدیران و دسترسی‌ها', faN((c.admins || []).length)) + row('rules', IC('file', '📜'), 'قوانین و پیام خوش‌آمد');
   if (c.type === 'channel') rows += row('stats', IC('chart', '📊'), 'آمار کانال');
   const w = document.createElement('div'); w.innerHTML = `<div class="section-title">ابزارها</div><div class="group">${rows}</div>`;
@@ -655,7 +656,7 @@ document.addEventListener('click', e => {
   else if (k === 'invite') inviteSheet(c); else if (k === 'admins') adminsSheet(c);
   else if (k === 'rules') rulesSheet(c); else if (k === 'stats') statsSheet(c);
   else if (k === 'call-voice') startCall(c.id, 'voice'); else if (k === 'call-video') startCall(c.id, 'video');
-  else if (k === 'vip') { c.vip = !chatEntVip(c); save(); renderInfo(); renderChatList(); toast(c.vip ? 'نشان کاربر ویژه فعال شد' : 'نشان کاربر ویژه برداشته شد', 'info'); }
+  else if (k === 'vip') { c.vip = !chatEntVip(c); save(); renderInfo(); renderChatList(); toast(c.vip ? 'نشان ' + vipWord(c) + ' فعال شد' : 'نشان ' + vipWord(c) + ' برداشته شد', 'info'); }
 });
 
 /* ============ ۲۶) حریم خصوصی ============ */
@@ -1498,7 +1499,8 @@ async function coverGradSheet(ent = state.me) {
 /* ============ نشان «کاربر ویژه» (جدا از تیک‌های تایید) ============ */
 function migrateVip() { [state.me, ...(state.accounts || [])].forEach(a => { if (a && a.badgeType === 'vip') { a.vip = true; a.badgeType = null; } }); }
 migrateVip();
-const chatEntVip = c => !!(c && c.type === 'private' && (c.vip || isVipAcc(accOfEntity(c))));
+const chatEntVip = c => !!(c && ((c.type === 'private' && (c.vip || isVipAcc(accOfEntity(c)))) || ((c.type === 'channel' || c.type === 'group') && c.vip)));   // کانال ویژه فقط در کانال‌ها، گروه ویژه فقط در گروه‌ها
+const vipWord = c => c.type === 'channel' ? 'کانال ویژه' : c.type === 'group' ? 'گروه ویژه' : 'کاربر ویژه';
 function addVip(el, on) {
   if (!el) return;
   const cur = el.querySelector(':scope > img.vipgold');
@@ -1662,22 +1664,77 @@ function centerTitle() {
 }
 
 console.log('extras.js loaded');
-})();
+
+/* ============ رنگ لوگوی کانال/گروه: پیش‌فرض = رنگ کاور؛ فقط کاربر ویژه می‌تواند عوضش کند و کاور هم با آن عوض می‌شود ============ */
+const DEF_GC = (AV_GRADS.push(['#6f93c8', '#8a97ad']), AV_GRADS.length - 1);     // رنگ پیش‌فرض (همان رنگ کاور پیش‌فرض)
+const gradCss = g => `linear-gradient(135deg,${g[0]},${g[1]})`;
+function syncGcColors() {
+  let ch = false;
+  (state.chats || []).forEach(c => {
+    if (!c || c.isGap || (c.type !== 'channel' && c.type !== 'group') || !isOwner(c)) return;
+    const av = c.avatar; if (!av || av.type !== 'gradient') return;          // عکس پروفایل دست نمی‌خورد
+    if (!gcVip(c)) { if (av.value !== DEF_GC) { c.avatar = { type: 'gradient', value: DEF_GC }; ch = true; } return; }
+    if (!c.coverPhoto) { const css = gradCss(AV_GRADS[(av.value || 0) % AV_GRADS.length]); if (c.coverGrad !== css) { c.coverGrad = css; ch = true; } }
+  });
+  return ch;
+}
+wrap('renderChatList', o => function () { try { if (syncGcColors()) save(); } catch (e) { console.error(e); } return o.apply(this, arguments); });
+wrap('renderInfo', o => function () { try { if (syncGcColors()) save(); } catch (e) { console.error(e); } return o.apply(this, arguments); });
+wrap('applyAvatarChange', o => function () { try { syncGcColors(); } catch (e) { console.error(e); } return o.apply(this, arguments); });
+wrap('renderAvatarPicker', o => function (tab) {
+  const e = (typeof getAvatarEntity === 'function') ? getAvatarEntity() : null;
+  if (avatarTargetType !== 'chat' || !e || (e.type !== 'channel' && e.type !== 'group')) return o.apply(this, arguments);
+  if (gcVip(e) && isOwner(e)) {                                               // کاربر ویژه: انتخاب رنگ (بدون ایموجی)
+    const r = o.call(this, tab === 'emoji' ? 'gradient' : tab);
+    const em = $('#avatar-panel [data-avtab="emoji"]'); if (em) em.remove();
+    return r;
+  }
+  const hasImg = e.avatar && e.avatar.type === 'image' && e.avatar.value;     // بقیه: فقط عکس
+  $('#avatar-panel').innerHTML = `<div class="av-preview"><div class="avatar" style="${avatarBgStyle(e)}">${avatarContent(e)}</div></div>
+    <div class="av-section"><div class="av-upload" id="av-upload-btn">${icon('camera', 22)} ${hasImg ? 'تغییر عکس' : 'انتخاب عکس'}</div>
+    ${hasImg ? `<div class="av-upload" id="av-remove-btn" style="margin-top:10px;color:var(--red,#f87171)">${icon('trash', 20)} حذف عکس</div>` : ''}
+    <div class="xc-lock" style="margin:14px 8px 4px">${icon('lock', 15)} تغییر رنگ لوگو فقط برای کاربران ویژه است</div></div>`;
+  $('#av-upload-btn').addEventListener('click', () => pickImage());
+  const rb = $('#av-remove-btn'); if (rb) rb.addEventListener('click', () => { e.avatar = { type: 'gradient', value: DEF_GC }; applyAvatarChange(); renderAvatarPicker(); });
+});
+
 
 /* ============ توضیح نشان‌ها: با زدن روی هر تیک/نشان، باکس معرفی آن باز می‌شود ============ */
 (function badgeInfoPopup() {
-  // متن توضیحات را از همین‌جا می‌توانی عوض کنی (کلید = عنوان نشان)
-  const BADGE_INFO = {
-    'نشان افراد سرشناس': 'این نشان به افراد سرشناس و شناخته‌شده مثل هنرمندان، ورزشکاران، نویسندگان و چهره‌های رسانه‌ای و اثرگذار داده می‌شود که هویت‌شان تایید شده است.',
-    'نشان سازمانی': 'این نشان برای سازمان‌ها، نهادها و مجموعه‌های رسمی مثل شرکت‌ها، رسانه‌ها، دانشگاه‌ها و ارگان‌ها است که اصالت حساب‌شان تایید شده است.',
-    'نشان تجاری': 'این نشان به کسب‌وکارها، فروشگاه‌ها و برندهای تجاری تایید‌شده تعلق می‌گیرد تا کاربران مطمئن باشند با حساب اصلی و معتبر آن برند در ارتباط‌اند.',
-    'نشان شخصی': 'این نشان برای حساب‌های شخصی تایید‌شده است؛ یعنی کاربرانی که هویت‌شان بررسی و تایید شده، حتی اگر چهره‌ی سرشناسی نباشند.',
-    'کاربر ویژه': 'این نشان مخصوص کاربران ویژه‌ی گپ است. کاربران ویژه به امکانات اختصاصی مثل گذاشتن کاور روی پروفایل دسترسی دارند (و مالک ویژه‌ی گروه یا کانال می‌تواند برای آن کاور بگذارد).'
-  };
+  // متن‌ها را از همین‌جا می‌توانی عوض کنی. w = «کانال» یا «گروه» یا «کاربر»؛ pl = جمع آن
+  const KIND = { 'نشان افراد سرشناس': 'famous', 'نشان سازمانی': 'org', 'نشان تجاری': 'biz', 'نشان شخصی': 'personal', 'کاربر ویژه': 'vip' };
+  function textFor(kind, w) {
+    const pl = w + '‌ها';
+    if (w === 'کاربر') return {
+      famous: ['نشان افراد سرشناس', 'این نشان به افراد سرشناس و شناخته‌شده مثل هنرمندان، ورزشکاران، نویسندگان و چهره‌های رسانه‌ای و اثرگذار داده می‌شود که هویت‌شان تایید شده است.'],
+      org: ['نشان سازمانی', 'این نشان برای سازمان‌ها، نهادها و مجموعه‌های رسمی مثل شرکت‌ها، رسانه‌ها، دانشگاه‌ها و ارگان‌ها است که اصالت حساب‌شان تایید شده است.'],
+      biz: ['نشان تجاری', 'این نشان به کسب‌وکارها، فروشگاه‌ها و برندهای تجاری تایید‌شده تعلق می‌گیرد تا کاربران مطمئن باشند با حساب اصلی و معتبر آن برند در ارتباط‌اند.'],
+      personal: ['نشان شخصی', 'این نشان برای حساب‌های شخصی تایید‌شده است؛ یعنی کاربرانی که هویت‌شان بررسی و تایید شده، حتی اگر چهره‌ی سرشناسی نباشند.'],
+      vip: ['کاربر ویژه', 'این نشان مخصوص کاربران ویژه‌ی گپ است. کاربران ویژه به امکانات اختصاصی مثل گذاشتن کاور روی پروفایل دسترسی دارند.']
+    }[kind];
+    return {
+      famous: [w + ' سرشناس', `این نشان به ${pl}یی داده می‌شود که متعلق به افراد سرشناس و شناخته‌شده، مثل هنرمندان، ورزشکاران، نویسندگان و چهره‌های رسانه‌ای هستند و هویت‌شان تایید شده است.`],
+      org: [w + ' سازمانی', `این نشان برای ${pl}یی است که متعلق به سازمان‌ها، نهادها، شرکت‌ها، رسانه‌ها و دانشگاه‌ها هستند و اصالت‌شان تایید شده است.`],
+      biz: [w + ' تجاری', `این نشان به ${pl}یی تعلق می‌گیرد که متعلق به کسب‌وکارها، فروشگاه‌ها و برندهای تجاری تایید‌شده‌اند تا اعضا مطمئن باشند ${w} اصلی و معتبر آن برند است.`],
+      personal: [w + ' شخصی', `این نشان برای ${pl}یی است که صاحب‌شان یک فرد عادی با هویت بررسی‌ و تایید‌شده است، حتی اگر سرشناس نباشد.`],
+      vip: [w + ' ویژه', `این نشان مخصوص ${pl} ویژه‌ی گپ است. ${pl} ویژه به امکانات اختصاصی مثل کاور اختصاصی و نمایش متمایز دسترسی دارند.`]
+    }[kind];
+  }
+  // نشان مال کدام «چت» است؟ (کانال / گروه / کاربر)
+  function wordFor(img) {
+    if (img.closest('#messages')) return 'کاربر';                       // نشان فرستنده‌ی پیام
+    let type = null;
+    const it = img.closest('[data-chat-type]'); if (it) type = it.getAttribute('data-chat-type');
+    if (!type) { const h = img.closest('.x-mh[data-cid]'); if (h) { const c = getChat(h.dataset.cid); type = c && c.type; } }
+    if (!type && img.closest('#info-body')) { const c = getChat(infoChatId); type = c && c.type; }
+    if (!type && img.closest('#screen-chat')) { const c = getChat(activeChatId); type = c && c.type; }
+    return type === 'channel' ? 'کانال' : type === 'group' ? 'گروه' : 'کاربر';
+  }
   let box = null;
   function close() { if (box) { box.remove(); box = null; } }
-  function open(img, title) {
+  function open(img, kind) {
     close();
+    const [title, desc] = textFor(kind, wordFor(img));
     box = document.createElement('div');
     box.className = 'x-binfo';
     box.innerHTML = '<div class="x-binfo-card" role="dialog" aria-modal="true">' +
@@ -1686,17 +1743,17 @@ console.log('extras.js loaded');
       '<button type="button" class="x-binfo-ok">متوجه شدم</button></div>';
     box.querySelector('.x-binfo-ic').src = img.currentSrc || img.src;
     box.querySelector('.x-binfo-t').textContent = title;
-    box.querySelector('.x-binfo-d').textContent = BADGE_INFO[title];
+    box.querySelector('.x-binfo-d').textContent = desc;
     box.addEventListener('click', e => { if (e.target === box || e.target.closest('.x-binfo-ok')) close(); });
     document.body.appendChild(box);
   }
   document.addEventListener('click', e => {
     const img = e.target && e.target.closest ? e.target.closest('img.vf') : null;
     if (!img || img.closest('.sheet-item')) return;      // داخل لیست انتخاب نشان، فقط انتخاب انجام شود
-    const title = (img.getAttribute('alt') || img.getAttribute('title') || '').trim();
-    if (!BADGE_INFO[title]) return;
+    const kind = KIND[(img.getAttribute('alt') || img.getAttribute('title') || '').trim()];
+    if (!kind) return;
     e.preventDefault(); e.stopPropagation();
-    open(img, title);
+    open(img, kind);
   }, true);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 })();
@@ -1735,12 +1792,40 @@ console.log('extras.js loaded');
     if (k === 'pin') return tx.includes('برداشتن') ? 'برداشتن' : 'سنجاق';
     return 'رسانه';
   };
+  const nameBadges = c => { try { return (c.badgeType ? ' ' + vfHTML(c.badgeType, 16) : '') + (chatEntVip(c) ? vipImg() : ''); } catch { return ''; } };
   const wrapIc = (el, col) => {
     const ic = el.firstElementChild; if (!ic || ic.classList.contains('x-mic')) return;
     const w = document.createElement('span'); w.className = 'x-mic';
     if (col) w.style.background = `linear-gradient(135deg,${col[0]},${col[1]})`;
     el.insertBefore(w, ic); w.appendChild(ic);
   };
+  const NT = {
+    private: ['گفتگوی شخصی', 'با آیدی کاربر', ['#60a5fa', '#3b82f6']],
+    group:   ['گروه', 'چند نفره', ['#a78bfa', '#8b5cf6']],
+    channel: ['کانال', 'پخش پیام', ['#fbbf24', '#f59e0b']],
+    ai:      ['چت با هوش مصنوعی', 'دستیار هوشمند گپ', ['#f472b6', '#ec4899']],
+    saved:   ['پیام‌های ذخیره‌شده', 'یادداشت‌های شخصی تو', ['#34d399', '#10b981']]
+  };
+  function buildNew(box) {
+    const els = {}; [...box.querySelectorAll(':scope > [data-nt]')].forEach(el => { els[el.dataset.nt] = el; });
+    const fill = (el, big) => {
+      const [t, sub, col] = NT[el.dataset.nt] || [el.textContent.trim(), '', ['#60a5fa', '#3b82f6']];
+      const ic = el.firstElementChild; el.textContent = '';
+      const chip = document.createElement('span'); chip.className = 'x-mic'; chip.style.background = `linear-gradient(135deg,${col[0]},${col[1]})`;
+      if (ic) chip.appendChild(ic);
+      const tx = document.createElement('span'); tx.className = 'xn-t'; tx.innerHTML = `<b>${t}</b><small>${sub}</small>`;
+      el.append(chip, tx);
+    };
+    const head = document.createElement('div'); head.className = 'xn-head';
+    head.innerHTML = '<b>گفتگوی جدید</b><small>چی می‌خوای بسازی؟</small>';
+    const tiles = document.createElement('div'); tiles.className = 'x-ntiles';
+    ['private', 'group', 'channel'].forEach(k => { if (els[k]) { fill(els[k]); tiles.appendChild(els[k]); } });
+    const sec = document.createElement('div'); sec.className = 'x-msec';
+    sec.innerHTML = '<div class="x-mt">دسترسی سریع</div><div class="x-mcard"></div>';
+    ['ai', 'saved'].forEach(k => { if (els[k]) { fill(els[k]); sec.lastElementChild.appendChild(els[k]); } });
+    const old = $('.sheet-title', box); if (old) old.remove();
+    box.prepend(head); box.appendChild(tiles); if (sec.lastElementChild.children.length) box.appendChild(sec);
+  }
   function buildMenu(box, c) {
     const items = [...box.querySelectorAll(':scope > .sheet-item')];
     if (!items.length) return;
@@ -1750,8 +1835,8 @@ console.log('extras.js loaded');
     const kind = c.type === 'channel' ? 'کانال' : c.type === 'group' ? 'گروه' : c.type === 'ai' ? 'دستیار هوشمند' : c.type === 'saved' ? 'پیام‌های ذخیره‌شده' : 'گفتگوی خصوصی';
     const sub = (c.type === 'channel' || c.type === 'group') ? `${kind} • ${faN(c.members || 0)} عضو` : kind;
     let av = ''; try { const r = avatarHTML(c, 46); if (typeof r === 'string') av = r; } catch {}
-    const head = document.createElement('div'); head.className = 'x-mh';
-    head.innerHTML = `<div class="x-mh-av">${av || esc((c.name || '?').trim().charAt(0))}</div><div class="x-mh-t"><b>${esc(c.name || '')}</b><small>${sub}</small></div>`;
+    const head = document.createElement('div'); head.className = 'x-mh'; head.dataset.cid = c.id;
+    head.innerHTML = `<div class="x-mh-av">${av || esc((c.name || '?').trim().charAt(0))}</div><div class="x-mh-t"><b><span class="x-mn">${esc(c.name || '')}</span>${nameBadges(c)}</b><small>${sub}</small></div>`;
 
     const frag = [head];
     if (g.tile.length) {
@@ -1778,8 +1863,9 @@ console.log('extras.js loaded');
     frag.slice(1).forEach(n => box.appendChild(n));
   }
   wrap('openSheet', o => function () {
-    const box = $('#sheet-content'); if (box) box.classList.remove('x-menu');
+    const box = $('#sheet-content'); if (box) box.classList.remove('x-menu', 'x-create', 'x-stats');
     const r = o.apply(this, arguments);
+    try { if (box && box.querySelector(':scope > [data-nt]')) { buildNew(box); box.classList.add('x-menu'); return r; } } catch (e) { console.error(e); }
     try {
       const c = getChat(activeChatId);
       if (box && c && box.querySelector(':scope > [data-cact="search"]') && box.querySelector(':scope > [data-cact="info"]')) { buildMenu(box, c); box.classList.add('x-menu'); }
@@ -1796,7 +1882,8 @@ console.log('extras.js loaded');
     if (/^عملیات/.test(t)) return 'more';
     return 'ov';
   };
-  let curTab = 'ov', curChat = null;
+  let curTab = 'ov', curChat = null, fitFn = null;
+  addEventListener('resize', () => { if (fitFn) fitFn(); });
   function buildInfo(c) {
     const body = $('#info-body'); if (!body || body.querySelector('.x-itabs')) return;
     const hero = body.querySelector(':scope > .info-hero'); if (!hero) return;
@@ -1824,7 +1911,7 @@ console.log('extras.js loaded');
       b.addEventListener('click', () => el.click());
       bar.appendChild(b);
     };
-    const f = s => body.querySelector(s);
+    const f = s => Object.values(panes).map(p => p.querySelector(s)).find(Boolean);   // ردیف‌ها الان داخل پنل‌های هنوز-جانشده‌اند
     const mute = f('[data-info-act="toggle-mute"]'), muted = mute && mute.textContent.includes('فعال کردن');
     addQA(mute, IC(muted ? 'bell' : 'bell-off', '🔔'), muted ? 'اعلان' : 'بی‌صدا');
     addQA(f('[data-xinfo="media"]'), IC('image', '🖼'), 'رسانه');
@@ -1853,10 +1940,341 @@ console.log('extras.js loaded');
     used.forEach(t => { last.after(panes[t.id]); last = panes[t.id]; });
     if (used.length < 2) tabs.style.display = 'none';
     show(curTab);
+    // چسباندن تب‌ها: ۱ پیکسل زیر نوار دایره‌ای بالا؛ و فضای اسکرول کافی تا حتی با محتوای کم هم تا بالا بچسبند
+    fitFn = () => {
+      const h = $('#screen-info .hdr'); if (!h || !body.isConnected) return;
+      const stick = Math.round(h.getBoundingClientRect().bottom - body.getBoundingClientRect().top) + 1;
+      const pt = parseFloat(getComputedStyle(body).paddingTop) || 0;   // sticky از لبه‌ی محتوا (بعد از padding) حساب می‌شود
+      body.style.setProperty('--x-stick', (stick - pt) + 'px');
+      const mh = Math.max(0, body.clientHeight - stick - tabs.offsetHeight - 14);
+      Object.values(panes).forEach(p => { p.style.minHeight = mh + 'px'; });
+    };
+    requestAnimationFrame(fitFn); setTimeout(fitFn, 450);
   }
   wrap('renderInfo', o => function () {
     const r = o.apply(this, arguments);
     try { const c = getChat(infoChatId); if (c) buildInfo(c); } catch (e) { console.error(e); }
     return r;
   });
+})();
+
+/* ============ جستجوی داخل هدر: با زدن روی ذره‌بین، همان‌جای «گپ» یک کادر جستجو باز می‌شود (نوار جدید زیر هدر باز نمی‌شود) ============ */
+(function inlineSearch() {
+  const hdr = $('#screen-list .main-hdr'), btn = $('#btn-search-toggle'), sb = $('#searchbar'), inp = $('#search-input');
+  if (!hdr || !btn || !sb || !inp) return;
+  let box = null;
+  const setBtn = on => { const u = btn.querySelector('use'); if (u) u.setAttribute('href', on ? '#i-close' : '#i-search'); btn.classList.toggle('x-on', on); };
+  function openInline() {
+    if (box) { inp.focus(); return; }
+    sb.style.display = 'none';
+    box = document.createElement('div'); box.id = 'x-hsearch'; box.className = 'x-hs';
+    box.innerHTML = '<svg width="18" height="18"><use href="#i-search"/></svg>';
+    box.appendChild(inp);                       // همان input اصلی؛ پس همه‌ی منطق جستجوی قبلی بدون تغییر کار می‌کند
+    inp.placeholder = 'جستجوی چت، پیام یا آیدی…';
+    $('#list-title').after(box);
+    hdr.classList.add('x-searching'); setBtn(true);
+    requestAnimationFrame(() => inp.focus());
+  }
+  function closeInline() {
+    if (!box) return;
+    sb.insertBefore(inp, sb.firstChild);
+    box.remove(); box = null;
+    sb.style.display = 'none';
+    hdr.classList.remove('x-searching'); setBtn(false);
+    if (inp.value) { inp.value = ''; renderChatList(); }
+  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest || !e.target.closest('#btn-search-toggle')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    box ? closeInline() : openInline();
+  }, true);
+  // جاهای دیگر برنامه (مثل کلیک روی هشتگ) که نوار قدیمی را باز می‌کنند، به همین جستجوی داخل هدر تبدیل شوند
+  new MutationObserver(() => { if (sb.style.display !== 'none') openInline(); }).observe(sb, { attributes: true, attributeFilter: ['style'] });
+  inp.addEventListener('keydown', e => { if (e.key === 'Escape') closeInline(); else if (e.key === 'Enter') inp.blur(); });
+})();
+
+
+/* ============ منوی نگه‌داشتن روی چت در لیست (کانال/گروه/گفتگو): همان طراحی جدید + نشان ویژه ============ */
+(function chatListMenu() {
+  const SECS = [
+    { id: 'msg',    t: 'پیام‌ها',          col: ['#60a5fa', '#3b82f6'] },
+    { id: 'look',   t: 'ظاهر و نشان‌ها',   col: ['#a78bfa', '#8b5cf6'] },
+    { id: 'safety', t: 'ایمنی',            col: ['#2dd4bf', '#14b8a6'] },
+    { id: 'mod',    t: 'اخطار و کنترل',    col: ['#fbbf24', '#f59e0b'] },
+    { id: 'danger', t: 'حذف',              col: ['#f87171', '#ef4444'] }
+  ];
+  const TCOL = [['#60a5fa', '#3b82f6'], ['#a78bfa', '#8b5cf6'], ['#34d399', '#10b981'], ['#fbbf24', '#f59e0b']];
+  const cat = el => {
+    const k = el.dataset.clact, tx = (el.textContent || '').trim();
+    if (k) {
+      if (['open', 'pin', 'mute', 'info'].includes(k)) return 'tile';
+      if (k === 'read') return 'msg';
+      if (k === 'verified') return 'look';
+      if (['warn', 'set-warner', 'ban'].includes(k)) return 'mod';
+      if (k === 'delete') return 'danger';
+      return 'look';
+    }
+    if (el.dataset.xvip) return 'look';
+    if (tx.includes('نخوانده')) return 'msg';
+    if (tx.includes('بلاک') || tx.includes('گزارش')) return 'safety';
+    return 'look';
+  };
+  const rank = el => ({ open: 0, info: 1, pin: 2, mute: 3 }[el.dataset.clact] ?? 9);
+  const label = el => {
+    const k = el.dataset.clact, tx = (el.textContent || '').trim();
+    if (k === 'open') return 'باز کردن';
+    if (k === 'info') return 'اطلاعات';
+    if (k === 'pin') return tx.includes('برداشتن') ? 'برداشتن' : 'سنجاق';
+    return tx.includes('فعال') ? 'اعلان' : 'بی‌صدا';
+  };
+  const wrapIc = (el, col) => {
+    const ic = el.firstElementChild; if (!ic || ic.classList.contains('x-mic')) return;
+    const w = document.createElement('span'); w.className = 'x-mic';
+    if (col) w.style.background = `linear-gradient(135deg,${col[0]},${col[1]})`;
+    el.insertBefore(w, ic); w.appendChild(ic);
+  };
+  const nameBadges = c => { try { return (c.badgeType ? ' ' + vfHTML(c.badgeType, 16) : '') + (chatEntVip(c) ? vipImg() : ''); } catch { return ''; } };
+
+  function build(box, c) {
+    const items = [...box.querySelectorAll(':scope > .sheet-item')]; if (!items.length) return;
+    const g = { tile: [] }; SECS.forEach(s => { g[s.id] = []; });
+    items.forEach(el => g[cat(el)].push(el));
+
+    const kind = c.type === 'channel' ? 'کانال' : c.type === 'group' ? 'گروه' : c.type === 'ai' ? 'دستیار هوشمند' : c.type === 'saved' ? 'پیام‌های ذخیره‌شده' : 'گفتگوی خصوصی';
+    const sub = (c.type === 'channel' || c.type === 'group') ? `${kind} • ${faN(c.members || 0)} عضو` : kind;
+    let av = ''; try { const r = avatarHTML(c, 46); if (typeof r === 'string') av = r; } catch {}
+    const head = document.createElement('div'); head.className = 'x-mh'; head.dataset.cid = c.id;
+    head.innerHTML = `<div class="x-mh-av">${av || esc((c.name || '?').trim().charAt(0))}</div><div class="x-mh-t"><b><span class="x-mn">${esc(c.name || '')}</span>${nameBadges(c)}</b><small>${sub}</small></div>`;
+
+    const parts = [];
+    if (g.tile.length) {
+      const tiles = document.createElement('div'); tiles.className = 'x-tiles';
+      g.tile.sort((a, b) => rank(a) - rank(b)).forEach((el, i) => {
+        const l = label(el);
+        wrapIc(el, TCOL[i % TCOL.length]);
+        [...el.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); });
+        const sp = document.createElement('span'); sp.className = 'x-tl'; sp.textContent = l; el.appendChild(sp);
+        tiles.appendChild(el);
+      });
+      parts.push(tiles);
+    }
+    SECS.forEach(s => {
+      if (!g[s.id].length) return;
+      const sec = document.createElement('div'); sec.className = 'x-msec';
+      sec.innerHTML = `<div class="x-mt">${s.t}</div><div class="x-mcard"></div>`;
+      g[s.id].forEach(el => { wrapIc(el, s.col); sec.lastElementChild.appendChild(el); });
+      parts.push(sec);
+    });
+    const old = $('.sheet-title', box); if (old) old.remove();
+    box.prepend(head);
+    parts.forEach(n => box.appendChild(n));
+  }
+
+  wrap('showChatMenu', o => function (id) {
+    const box0 = $('#sheet-content'); if (box0) box0.classList.remove('x-menu');
+    const r = o.apply(this, arguments);
+    try {
+      const c = getChat(id), box = $('#sheet-content');
+      if (!c || !box || !box.querySelector(':scope > [data-clact="open"]')) return r;
+      // نشان ویژه: کانال ویژه در کانال‌ها، گروه ویژه در گروه‌ها، کاربر ویژه در گفتگوها
+      if (c.type !== 'ai' && c.type !== 'saved') {
+        const on = chatEntVip(c), w = vipWord(c);
+        const d = mkItem(on ? 'برداشتن نشان ' + w : 'نشان ' + w, '<img src="vipgold.png" alt="" style="width:20px;height:19px;object-fit:contain">', () => {
+          c.vip = !on; save(); renderChatList(); if (infoChatId === c.id) renderInfo();
+          toast(c.vip ? 'نشان ' + w + ' فعال شد' : 'نشان ' + w + ' برداشته شد', 'info');
+        });
+        d.dataset.xvip = '1';
+        const ref = $('[data-clact="verified"]', box); ref ? ref.after(d) : box.appendChild(d);
+      }
+      build(box, c); box.classList.add('x-menu');
+    } catch (e) { console.error(e); }
+    return r;
+  });
+})();
+
+
+/* ============ پنل ساخت کانال / گروه: یک فرم کامل به‌جای چند پیام پشت‌سرهم ============ */
+(function createPanel() {
+  const esc2 = v => String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  function openCreate(type) {
+    const isCh = type === 'channel', word = isCh ? 'کانال' : 'گروه';
+    const vipMe = isVipAcc(state.me), cap0 = memberCap({ type }); let gi = vipMe ? Math.floor(Math.random() * (AV_GRADS.length - 1)) : DEF_GC, pub = isCh;
+    openSheet(`
+      <div class="xc-hero">
+        <div class="xc-av" id="xc-av"></div>
+        ${vipMe ? `<div class="xc-sw" id="xc-sw">${AV_GRADS.map((g, i) => `<button type="button" class="xc-dot" data-g="${i}" style="background:linear-gradient(135deg,${g[0]},${g[1]})" aria-label="رنگ ${i + 1}"></button>`).join('')}</div>` : `<div class="xc-lock">${icon('lock', 15)} رنگ لوگو پیش‌فرض است؛ تغییر رنگ فقط برای کاربران ویژه</div>`}
+      </div>
+      <div class="xc-title">${word} جدید</div>
+      <div class="xc-card">
+        <div class="xc-f"><label for="xc-name">نام ${word}</label><input id="xc-name" maxlength="40" placeholder="مثلاً ${isCh ? 'اخبار روز' : 'دوستان'}" autocomplete="off"></div>
+        <div class="xc-f"><label for="xc-desc">توضیحات (اختیاری)</label><textarea id="xc-desc" rows="2" maxlength="200" placeholder="درباره‌ی این ${word} بنویس…"></textarea></div>
+        <div class="xc-f xc-last"><label for="xc-cnt">تعداد اعضا (حداکثر ${faN(cap0)})</label><input id="xc-cnt" type="number" inputmode="numeric" min="0" value="${isCh ? 100 : 4}"><div class="xc-err" id="xc-cerr"></div></div>
+      </div>
+      <div class="xc-card xc-pad">
+        <div class="xc-lab">نوع ${word}</div>
+        <div class="xc-seg" id="xc-seg">
+          <button type="button" data-p="1" class="${pub ? 'on' : ''}">${icon('globe')}عمومی</button>
+          <button type="button" data-p="0" class="${pub ? '' : 'on'}">${icon('lock')}خصوصی</button>
+        </div>
+        <div class="xc-hint" id="xc-hint"></div>
+        <div class="xc-id" id="xc-idwrap"><span>@</span><input id="xc-id" dir="ltr" placeholder="آیدی عمومی (مثلاً my_${isCh ? 'channel' : 'group'})" autocomplete="off" autocapitalize="off"></div>
+        <div class="xc-err" id="xc-err"></div>
+      </div>
+      <button type="button" class="xc-go" id="xc-go">ساخت ${word}</button>`);
+    const box = $('#sheet-content'); box.classList.remove('x-menu'); box.classList.add('x-create'); box.dataset.xct = type;
+    const nameI = $('#xc-name', box), av = $('#xc-av', box), idI = $('#xc-id', box), err = $('#xc-err', box);
+    const paint = () => {
+      const g = AV_GRADS[gi];
+      av.style.background = `linear-gradient(135deg,${g[0]},${g[1]})`;
+      av.textContent = (typeof initials === 'function' ? initials(nameI.value.trim() || word) : (nameI.value.trim() || word).charAt(0));
+      $$('#xc-sw .xc-dot', box).forEach(d => d.classList.toggle('on', +d.dataset.g === gi));
+    };
+    const syncType = () => {
+      $$('#xc-seg button', box).forEach(b => b.classList.toggle('on', (b.dataset.p === '1') === pub));
+      $('#xc-idwrap', box).style.display = pub ? 'flex' : 'none';
+      $('#xc-hint', box).textContent = pub ? `هر کسی با آیدی می‌تواند ${word} را پیدا کند.` : `فقط با دعوت می‌شود وارد ${word} شد.`;
+      err.textContent = '';
+    };
+    box.addEventListener('click', e => {
+      const d = e.target.closest('.xc-dot'); if (d) { gi = +d.dataset.g; paint(); return; }
+      const sg = e.target.closest('#xc-seg button'); if (sg) { pub = sg.dataset.p === '1'; syncType(); }
+    });
+    const cntI = $('#xc-cnt', box), cerr = $('#xc-cerr', box);
+    const chkCnt = () => { const n = parseInt(cntI.value, 10); const bad = !isNaN(n) && n > cap0; cerr.textContent = bad ? 'تعداد اعضا نمی‌تواند بیشتر از ' + faN(cap0) + ' باشد' : ''; return !bad; };
+    cntI.addEventListener('input', chkCnt);
+    nameI.addEventListener('input', paint);
+    idI.addEventListener('input', () => {
+      const u = normUser(idI.value);
+      err.textContent = !u ? '' : !validUser(u) ? 'آیدی باید ۳ تا ۳۲ حرف انگلیسی، عدد یا _ باشد' : userTaken(u) ? 'این آیدی قبلاً گرفته شده' : '';
+    });
+    $('#xc-go', box).addEventListener('click', () => {
+      const name = nameI.value.trim();
+      if (!name) { toast('نام نمی‌تونه خالی باشه', 'error'); nameI.focus(); return; }
+      let username = '';
+      if (pub) {
+        const u = normUser(idI.value);
+        if (u) {
+          if (!validUser(u)) { err.textContent = 'آیدی باید ۳ تا ۳۲ حرف انگلیسی، عدد یا _ باشد'; idI.focus(); return; }
+          if (userTaken(u)) { err.textContent = 'این آیدی قبلاً گرفته شده'; idI.focus(); return; }
+          username = u;
+        }
+      }
+      if (!chkCnt()) { toast('تعداد اعضا بیشتر از حداکثر مجاز است', 'error'); cntI.focus(); return; }
+      const n = parseInt(cntI.value, 10), cnt = (isNaN(n) || n < 0) ? 0 : n;
+      const data = { name, type, avatar: { type: 'gradient', value: gi }, badgeType: null, username, isPublic: pub, description: $('#xc-desc', box).value.trim(), coverPhoto: null, admins: [], permissions: { sendMessages: 'all', editInfo: 'all' }, joined: true, members: cnt };
+      if (vipMe) data.coverGrad = gradCss(AV_GRADS[gi]);        // کاور هم‌رنگ لوگو
+      if (type === 'group') {
+        const shuffled = MEMBER_POOL.slice().sort(() => Math.random() - 0.5);
+        data.membersList = shuffled.slice(0, Math.min(cnt, shuffled.length)).map(m => ({ ...m }));
+        if (data.membersList.length) data.admins = [data.membersList[0].name];
+      }
+      closeSheet();
+      setTimeout(() => finishCreate(data, type), 150);
+    });
+    paint(); syncType();
+    setTimeout(() => nameI.focus(), 250);
+  }
+  function openPrivate() {
+    openSheet(`
+      <div class="xc-hero"><div class="xc-av" id="xc-av" style="background:linear-gradient(135deg,#60a5fa,#3b82f6)">${icon('user')}</div></div>
+      <div class="xc-title">گفتگوی شخصی</div>
+      <div class="xc-card xc-pad">
+        <div class="xc-lab">آیدی کاربر</div>
+        <div class="xc-id"><span>@</span><input id="xc-pid" dir="ltr" placeholder="مثلاً ali_gap" autocomplete="off" autocapitalize="off"></div>
+        <div class="xp-res" id="xp-res"></div>
+      </div>
+      <button type="button" class="xc-go" id="xc-go">شروع گفتگو</button>`);
+    const box = $('#sheet-content'); box.classList.remove('x-menu'); box.classList.add('x-create'); box.dataset.xct = 'private';
+    const inp = $('#xc-pid', box), res = $('#xp-res', box), av = $('#xc-av', box);
+    const badges = e => { try { return (e.badgeType ? ' ' + vfHTML(e.badgeType, 16) : '') + ((e.vip || isVipAcc(accOfEntity(e))) ? vipImg() : ''); } catch { return ''; } };
+    const look = () => {
+      const u = normUser(inp.value.replace(/@/g, ''));
+      if (!u) { res.innerHTML = ''; av.innerHTML = icon('user'); return null; }
+      let f = null; try { f = findByUsername(u); } catch {}
+      const ok = f && (f.source === 'local_account' || f.source === 'chat' || f.source === 'directory');
+      if (ok && (f.entity.type === 'group' || f.entity.type === 'channel')) { res.innerHTML = '<div class="xp-no">این یک گروه یا کانال است؛ از بخش کشف عضو شو.</div>'; return { bad: true }; }
+      if (ok) { res.innerHTML = `<div class="xp-found"><div class="xp-av">${avatarHTML(f.entity, 44)}</div><div class="xp-t"><b><span class="x-mn">${esc2(f.entity.name)}</span>${badges(f.entity)}</b><small>@${esc2(f.entity.username || u)}</small></div></div>`; return f; }
+      res.innerHTML = '<div class="xp-new">کاربری با این آیدی پیدا نشد؛ یک گفتگوی جدید با همین آیدی ساخته می‌شود.</div>'; return null;
+    };
+    inp.addEventListener('input', look);
+    $('#xc-go', box).addEventListener('click', () => {
+      const username = inp.value.trim().replace(/@/g, '');
+      if (!username) { toast('آیدی را وارد کن', 'error'); inp.focus(); return; }
+      const f = look(); if (f && f.bad) return;
+      closeSheet();
+      setTimeout(() => {
+        if (f && f.entity) {
+          let chat = state.chats.find(c => c.username && normUser(c.username) === normUser(username));
+          if (!chat) {
+            chat = { id: rid(), name: f.entity.name, type: 'private', username: f.entity.username, avatar: f.entity.avatar, coverPhoto: f.entity.coverPhoto, badgeType: f.entity.badgeType, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: Date.now(), joined: true };
+            state.chats.push(chat);
+          }
+          save(); renderChatList(); openChat(chat.id);
+          return;
+        }
+        createChat({ name: username, type: 'private', username, avatar: { type: 'gradient', value: Math.floor(Math.random() * AV_GRADS.length) }, badgeType: null, online: Math.random() > .5 });
+      }, 150);
+    });
+    setTimeout(() => inp.focus(), 250);
+  }
+  wrap('promptChatName', o => function (type) {
+    if (type === 'private') return openPrivate();
+    if (type === 'channel' || type === 'group') return openCreate(type);
+    return o.apply(this, arguments);
+  });
+})();
+
+
+/* ============ کانال رسمی «گپ» (@Gap): ۴۵۰ هزار عضو، هر ساعت بین ۱ تا ۵۰۰ عضو جدید؛ سقف اعضای همه‌ی کانال‌ها = اعضای همین کانال ============ */
+(function gapOfficial() {
+  const HOUR = 3600000;
+  const isGapLike = c => c && c.type === 'channel' && (c.isGap || String(c.username || '').replace(/^@/, '').toLowerCase() === 'gap');
+  const gap = () => state.chats.find(isGapLike);
+  // اگر از قبل کانالی با آیدی @Gap (یا خودِ کانال رسمی) هست، همان را نگه می‌داریم و به‌روز می‌کنیم؛ کانال تکراری ساخته نمی‌شود
+  function seed() {
+    const all = state.chats.filter(isGapLike);
+    if (all.length) {
+      all.sort((p, q) => (q.isGap ? 1 : 0) - (p.isGap ? 1 : 0) || (q.messages || []).length - (p.messages || []).length);
+      const g = all[0]; let ch = false;
+      const set = (k, v) => { if (JSON.stringify(g[k]) !== JSON.stringify(v)) { g[k] = v; ch = true; } };
+      set('isGap', true); set('name', 'گپ'); set('username', 'Gap'); set('isPublic', true); set('avatar', { type: 'image', value: 'Logo.png' }); set('joined', true);
+      if (!g.description) set('description', 'کانال رسمی گپ');
+      if (!g.gapLast) set('gapLast', Date.now());
+      if ((g.members || 0) < 450000) set('members', 450000);
+      // کانال‌های تکراری گپ حذف شوند
+      all.slice(1).forEach(d => { const i = state.chats.indexOf(d); if (i >= 0) { state.chats.splice(i, 1); ch = true; } });
+      state.gapSeeded = true;
+      return ch;
+    }
+    if (state.gapSeeded) return false;      // قبلاً ساخته شده و کاربر خودش حذفش کرده
+    state.gapSeeded = true;
+    const now = Date.now();
+    state.chats.push({ id: rid(), isGap: true, name: 'گپ', type: 'channel', username: 'Gap', isPublic: true, avatar: { type: 'image', value: 'Logo.png' }, badgeType: null, description: 'کانال رسمی گپ', coverPhoto: null, admins: [], permissions: { sendMessages: 'all', editInfo: 'all' }, joined: true, members: 450000, gapLast: now, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: now });
+    return true;
+  }
+  function grow() {
+    const g = gap(); if (!g) return false;
+    if (!g.gapLast) g.gapLast = Date.now();
+    const n = Math.floor((Date.now() - g.gapLast) / HOUR); if (n <= 0) return false;
+    let add = 0; const loops = Math.min(n, 2000);
+    for (let i = 0; i < loops; i++) add += 1 + Math.floor(Math.random() * 500);   // هر ساعت بین ۱ تا ۵۰۰
+    if (n > loops) add += Math.round((n - loops) * 250.5);
+    g.members = (g.members || 0) + add; g.gapLast += n * HOUR;
+    return true;
+  }
+  function enforce() {
+    let ch = false;
+    state.chats.forEach(c => { if ((c.type === 'channel' || c.type === 'group') && !isGapLike(c)) { const cap = memberCap(c); if ((c.members || 0) > cap) { c.members = cap; ch = true; } } });
+    return ch;
+  }
+  function tick() {
+    let ch = false; ch = seed() || ch; const grew = grow(); ch = grew || ch; ch = enforce() || ch;
+    if (!ch) return;
+    save(); try { renderChatList(); const g = gap(); if (grew && g && infoChatId === g.id) renderInfo(); } catch (e) { console.error(e); }
+  }
+  tick();
+  setInterval(tick, 60000);
+})();
+
+
 })();
