@@ -4,6 +4,8 @@
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// سقف تعداد اعضای هر کانال = تعداد اعضای کانال رسمی «گپ» (هر چه آن بزرگ‌تر شود، سقف هم بالاتر می‌رود)
+function memberCap(c) { if (!c || (c.type !== 'channel' && c.type !== 'group')) return 9999999; const g = (state.chats || []).find(x => x.type === 'channel' && (x.isGap || String(x.username || '').replace(/^@/, '').toLowerCase() === 'gap')); return g ? Math.max(1, g.members || 0) : 9999999; }
 const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const icon = (n, s = 20) => `<svg width="${s}" height="${s}"><use href="#i-${n}"/></svg>`;
@@ -2057,9 +2059,11 @@ function handleInfoAction(act, c) {
   }
   if (act === 'toggle-public') { c.isPublic = !c.isPublic; renderInfo(); save(); toast(c.isPublic?'عمومی':'خصوصی'); return; }
   if (act === 'edit-members') {
+    if (c.isGap) { toast('تعداد اعضای کانال گپ به‌صورت خودکار زیاد می‌شود', 'info'); return; }
     showPrompt('تعداد اعضا', String(c.members||0), v => {
       const n = parseInt(v, 10);
       if (isNaN(n) || n < 0) { toast('عدد معتبر'); return; }
+      const cap = memberCap(c); if (n > cap) { toast('تعداد اعضا نمی‌تواند بیشتر از ' + cap.toLocaleString('fa-IR') + ' باشد', 'error'); return; }
       c.members = Math.min(n, 9999999);
       if (c.type === 'group' && Array.isArray(c.membersList)) {
         while (c.membersList.length < Math.min(c.members, 50)) {
@@ -3312,7 +3316,7 @@ $('#btn-chat-menu').addEventListener('click', () => {
         return;
       }
       if (act === 'rename') { showPrompt('نام جدید', c.name, v => { if (!v.trim()) return; c.name = v.trim(); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
-      if (act === 'members') { showPrompt('تعداد اعضا', String(c.members||0), v => { const n = parseInt(v, 10); if (isNaN(n) || n < 0) { toast('عدد معتبر', 'error'); return; } c.members = Math.min(n, 9999999); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
+      if (act === 'members') { if (c.isGap) { toast('تعداد اعضای کانال گپ به‌صورت خودکار زیاد می‌شود', 'info'); return; } showPrompt('تعداد اعضا', String(c.members||0), v => { const n = parseInt(v, 10); if (isNaN(n) || n < 0) { toast('عدد معتبر', 'error'); return; } const cap = memberCap(c); if (n > cap) { toast('تعداد اعضا نمی‌تواند بیشتر از ' + cap.toLocaleString('fa-IR') + ' باشد', 'error'); return; } c.members = Math.min(n, 9999999); renderChatHeader(); renderChatList(); save(); toast('تغییر کرد', 'success'); }); return; }
       if (act === 'pin') { c.pinned = !c.pinned; toast(c.pinned?'سنجاق':'برداشته شد', 'info'); }
       if (act === 'mute') { c.muted = !c.muted; toast(c.muted?'بی‌صدا':'فعال', 'info'); }
       if (act === 'toggle-comments') { c.commentsEnabled = !c.commentsEnabled; toast(c.commentsEnabled ? 'کامنت‌ها فعال شد' : 'کامنت‌ها غیرفعال شد', 'info'); }
@@ -3646,19 +3650,22 @@ $('#settings-body').addEventListener('click', e => {
     }
     if (act === 'check-update') {
       toast('در حال بررسی و به روز رسانی...', 'info');
-      setTimeout(async () => {
+      (async () => {
         try {
-          if ('caches' in window) {
-            const cacheNames = await caches.keys();
-            for (let name of cacheNames) await caches.delete(name);
-          }
-          if ('serviceWorker' in navigator) {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            for (let reg of regs) await reg.unregister();
-          }
+          // ۱) سرویس‌ورکر و کش‌های قدیمی حذف شوند تا درخواست‌ها مستقیم به سرور برود
+          if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); for (const reg of regs) await reg.unregister(); }
+          if ('caches' in window) { for (const name of await caches.keys()) await caches.delete(name); }
+          // ۲) فایل‌های اصلی دوباره و اجباری دانلود شوند (کش خود مرورگر هم تازه می‌شود)
+          const urls = new Set([location.pathname, 'manifest.json']);
+          document.querySelectorAll('link[rel="stylesheet"][href], script[src]').forEach(el => urls.add(el.getAttribute('href') || el.getAttribute('src')));
+          ['blue-tick.png', 'green-tick.png', 'personal-tick.png', 'yellow-tick.png', 'vipgold.png'].forEach(u => urls.add(u));
+          await Promise.race([
+            Promise.all([...urls].map(u => fetch(u, { cache: 'reload' }).catch(() => {}))),
+            new Promise(r => setTimeout(r, 8000))
+          ]);
         } catch (e) { console.log(e); }
         window.location.reload();
-      }, 1500);
+      })();
     }
     if (act === 'toggle-theme') { state.theme = state.theme === 'light' ? 'dark' : 'light'; applyTheme(); renderSettings(); save(); toast(state.theme === 'light' ? 'تم روشن' : 'تم تاریک', 'info'); }
     if (act === 'export') exportBackup();
