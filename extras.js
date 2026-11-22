@@ -624,6 +624,7 @@ function statsSheet(c) {
       ${kpi('💬', 'linear-gradient(135deg,#22d3ee,#0891b2)', faN(cm), 'نظر')}
     </div>
     <div class="x-sc2"><h4>بازدید ۱۰ پست آخر</h4>${last.length ? `<div class="x-bars2">${last.map(m => `<div class="c"><span class="v">${faN(vw(m))}</span><i style="height:${Math.max(5, Math.round(vw(m) / mx * 100))}%"></i><span class="l">${esc(new Date(m.ts).toLocaleDateString('fa-IR', { day: 'numeric', month: 'numeric' }))}</span></div>`).join('')}</div>` : '<div class="fx-empty">هنوز پستی نیست</div>'}</div>
+    ${growthHTML(c)}
     ${top ? `<div class="x-sc2"><h4>برترین پست</h4><div class="x-top"><span class="t">${esc((pinPreview(top) || 'پست').slice(0, 90))}</span><span class="m">👁 ${faN(vw(top))} · ${fmtListTime(top.ts)}</span></div></div>` : ''}
     ${eTop.length ? `<div class="x-sc2"><h4>پرطرفدارترین واکنش‌ها</h4>${eTop.map(([e, n]) => `<div class="x-er"><span class="e">${e}</span><span class="b"><i style="width:${Math.round(n / em * 100)}%"></i></span><span class="n">${faN(n)}</span></div>`).join('')}</div>` : ''}
     <div class="x-sc2"><h4>پست‌های ۷ روز گذشته${posts.length ? ` <small>· پرکارترین روز: ${wd(days[best])}</small>` : ''}</h4><div class="x-bars2 s">${per.map((n, i) => `<div class="c"><span class="v">${faN(n)}</span><i style="height:${Math.max(5, Math.round(n / mp * 100))}%"></i><span class="l">${esc(wd(days[i]))}</span></div>`).join('')}</div></div>
@@ -658,6 +659,261 @@ document.addEventListener('click', e => {
   else if (k === 'call-voice') startCall(c.id, 'voice'); else if (k === 'call-video') startCall(c.id, 'video');
   else if (k === 'vip') { c.vip = !chatEntVip(c); save(); renderInfo(); renderChatList(); toast(c.vip ? 'نشان ' + vipWord(c) + ' فعال شد' : 'نشان ' + vipWord(c) + ' برداشته شد', 'info'); }
 });
+
+/* ============ رشد خودکار اعضا / ۱۰) رشد اعضا در آمار / ۵) نقش‌ها / ۱۷) موضوعات گروه / ۲۱) جدول برترین‌ها / ۲۳) درخواست نشان ============ */
+const NX_HIGH = 10000;                       // از این تعداد به بالا «پرعضو» حساب می‌شود: ۲۰۰ تا ۵۰۰ عضو در ساعت؛ کمتر: ۱۰۰ تا ۲۰۰ عضو در ساعت
+const nxRand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const nxDayKey = ts => { const d = new Date(ts); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+const nxIsGC = c => !!c && (c.type === 'channel' || c.type === 'group');
+function nxSheet(html) { openSheet(html); const b = $('#sheet-content'); b.classList.add('x-menu', 'x-fs'); return b; }
+function nxFillMembers(c) {                  // گروه: فهرست اعضای نمایشی هم با رشد پر شود
+  if (c.type !== 'group' || !Array.isArray(c.membersList)) return;
+  const used = new Set(c.membersList.map(x => x.name)), pool = MEMBER_POOL.filter(p => !used.has(p.name));
+  while (c.membersList.length < Math.min(c.members || 0, 50) && pool.length) c.membersList.push(Object.assign({}, pool.splice(Math.floor(Math.random() * pool.length), 1)[0]));
+}
+function nxGrowAll() {
+  const changed = []; if (S().real) return changed;
+  const now = Date.now(), HOUR = 3600000;
+  (state.chats || []).forEach(c => {
+    if (!nxIsGC(c) || c.isGap) return;      // کانال گپ جداگانه حساب می‌شود
+    if (!c.growLast) { c.growLast = now; return; }
+    const n = Math.floor((now - c.growLast) / HOUR); if (n <= 0) return;
+    const cap = memberCap(c), m0 = c.members || 0; let add = 0; const loops = Math.min(n, 2000);
+    for (let i = 0; i < loops && m0 + add < cap; i++) add += (m0 + add >= NX_HIGH) ? nxRand(200, 500) : nxRand(100, 200);
+    if (n > loops && m0 + add < cap) add += Math.round((n - loops) * ((m0 + add >= NX_HIGH) ? 350 : 150));
+    c.growLast += n * HOUR;
+    const nm = Math.min(cap, m0 + add);
+    if (nm !== m0) { c.members = nm; nxFillMembers(c); changed.push(c); }
+  });
+  return changed;
+}
+function nxEnsureMH(c) {                     // تاریخچه‌ی اعضا برای نمودار رشد (۱۴ روز)
+  if (Array.isArray(c.mh) && c.mh.length >= 8) return;
+  const now = Date.now(); let m = c.members || 0; const arr = [], avg = (c.isGap ? 250 : m >= NX_HIGH ? 350 : 150) * 24;
+  for (let i = 0; i < 14; i++) { arr.unshift({ d: nxDayKey(now - i * 864e5), m }); m = Math.max(0, m - Math.min(Math.round(avg * (0.6 + Math.random() * 0.8)), Math.round(m * 0.12))); }
+  c.mh = arr;
+}
+function nxRecord(c) {
+  nxEnsureMH(c); const t = nxDayKey(Date.now()), last = c.mh[c.mh.length - 1];
+  if (last.d === t) { if (last.m === c.members) return false; last.m = c.members; return true; }
+  c.mh.push({ d: t, m: c.members || 0 }); if (c.mh.length > 45) c.mh.splice(0, c.mh.length - 45); return true;
+}
+function growthHTML(c) {
+  nxEnsureMH(c); const mh = c.mh.slice(-8), d = [];
+  for (let i = 1; i < mh.length; i++) d.push({ d: mh[i].d, n: Math.max(0, mh[i].m - mh[i - 1].m) });
+  const mx = Math.max(1, ...d.map(x => x.n)), tot = d.reduce((s, x) => s + x.n, 0);
+  const lbl = k => { const [y, m, dd] = k.split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString('fa-IR', { weekday: 'short' }); };
+  return `<div class="x-sc2"><h4>رشد اعضا <small>· ${faN(tot)} عضو جدید در ۷ روز اخیر</small></h4><div class="x-bars2 s">${d.map(x => `<div class="c"><span class="v">${faN(x.n)}</span><i style="height:${Math.max(5, Math.round(x.n / mx * 100))}%"></i><span class="l">${lbl(x.d)}</span></div>`).join('')}</div></div>`;
+}
+
+/* ---- ۲۳) درخواست نشان تایید ---- */
+const NX_KINDS = { blue: 'سرشناس', yellow: 'سازمانی', green: 'تجاری', personal: 'شخصی' };
+const nxReqList = () => (state.badgeReqs = state.badgeReqs || []);
+function nxProcessReqs() {
+  let n = 0;
+  nxReqList().forEach(r => {
+    if (r.status !== 'pending' || Date.now() < r.decideAt) return;
+    const ok = (r.reason || '').trim().length >= 15;
+    r.status = ok ? 'approved' : 'rejected'; n++;
+    if (ok) { const t = r.target === 'me' ? state.me : getChat(r.target); if (t) t.badgeType = r.kind; }
+    try { toast(ok ? 'درخواست نشان تو تایید شد' : 'درخواست نشان رد شد؛ توضیحات کافی نبود', ok ? 'success' : 'error'); } catch {}
+  });
+  return n;
+}
+function nxBadgeReqSheet(target) {
+  const isMe = target === 'me', c = isMe ? null : getChat(target), w = isMe ? 'حساب' : (c.type === 'channel' ? 'کانال' : 'گروه');
+  const list = nxReqList().filter(r => r.target === target).slice().reverse();
+  const st = { pending: 'در انتظار بررسی', approved: 'تایید شد', rejected: 'رد شد' };
+  const b = nxSheet(`<div class="xn-head"><b>درخواست نشان تایید</b><small>${isMe ? 'حساب من' : esc(c.name)}</small></div>
+    <div class="x-msec"><div class="x-mt">درخواست‌ها</div><div class="x-mcard">${list.length ? list.map(r => `<div class="nx-row"><div class="nx-t"><b>نشان ${w} ${NX_KINDS[r.kind]}</b><small>${fmtListTime(r.ts)}</small></div><span class="nx-st ${r.status}">${st[r.status]}</span></div>`).join('') : '<div class="nx-empty">هنوز درخواستی ثبت نشده</div>'}</div></div>
+    <button type="button" class="nx-primary" id="nx-new">درخواست جدید</button>`);
+  $('#nx-new', b).addEventListener('click', () => {
+    if (list.some(r => r.status === 'pending')) { toast('یک درخواست در انتظار بررسی داری', 'info'); return; }
+    let kind = 'blue';
+    const f = nxSheet(`<div class="xn-head"><b>درخواست نشان ${w}</b><small>نوع نشان و دلیل درخواست را بنویس</small></div>
+      <div class="nx-chips" id="nx-kinds">${Object.entries(NX_KINDS).map(([k, t]) => `<button type="button" class="nx-chip${k === kind ? ' on' : ''}" data-k="${k}">${w} ${t}</button>`).join('')}</div>
+      <div class="xc-card"><div class="xc-f xc-last"><label for="nx-why">توضیح (حداقل ۱۵ حرف)</label><textarea id="nx-why" rows="3" maxlength="300" placeholder="چرا باید به این ${w} نشان تایید داده شود؟"></textarea></div></div>
+      <button type="button" class="nx-primary" id="nx-send">ثبت درخواست</button>`);
+    f.addEventListener('click', e => { const k = e.target.closest('[data-k]'); if (k) { kind = k.dataset.k; $$('#nx-kinds .nx-chip', f).forEach(x => x.classList.toggle('on', x === k)); } });
+    $('#nx-send', f).addEventListener('click', () => {
+      const why = $('#nx-why', f).value.trim(); if (!why) { toast('توضیح را بنویس', 'error'); return; }
+      nxReqList().push({ id: rid(), target, kind, reason: why, ts: Date.now(), decideAt: Date.now() + 90000, status: 'pending' });
+      save(); closeSheet(); toast('درخواست ثبت شد؛ نتیجه تا چند لحظه‌ی دیگر اعلام می‌شود', 'success');
+    });
+  });
+}
+
+/* ---- ۵) نقش‌های سفارشی + گزارش اقدامات مدیران ---- */
+const NX_ROLES = [
+  { id: 'full', name: 'مدیر کامل', builtin: true, perms: { delete: true, pin: true, members: true, info: true, invite: true } },
+  { id: 'mod', name: 'ناظر', builtin: true, perms: { delete: true, pin: true, members: false, info: false, invite: false } },
+  { id: 'writer', name: 'نویسنده', builtin: true, perms: { delete: false, pin: true, members: false, info: false, invite: false } }
+];
+const nxRoles = c => NX_ROLES.concat(c.roles || []);
+function nxLog(c, text) { (c.adminLog = c.adminLog || []).unshift({ ts: Date.now(), by: state.me.name, t: text }); if (c.adminLog.length > 100) c.adminLog.length = 100; }
+function nxRolesSheet(c) {
+  const mgr = isOwner(c), roles = nxRoles(c), ad = c.admins || [], log = (c.adminLog || []).slice(0, 15);
+  const permTxt = r => PERMS.filter(([k]) => r.perms[k]).map(([, t]) => t).join('، ') || 'فقط ارسال پیام';
+  const b = nxSheet(`<div class="xn-head"><b>نقش‌ها و گزارش مدیران</b><small>${esc(c.name)}</small></div>
+    <div class="x-msec"><div class="x-mt">نقش‌ها</div><div class="x-mcard">${roles.map(r => `<div class="nx-row"><div class="nx-t"><b>${esc(r.name)}</b><small>${esc(permTxt(r))}</small></div>${mgr && !r.builtin ? `<button type="button" class="nx-btn" data-rd="${r.id}">حذف</button>` : ''}</div>`).join('')}</div>${mgr ? '<button type="button" class="nx-btn nx-wide" data-ra>+ نقش جدید</button>' : ''}</div>
+    <div class="x-msec"><div class="x-mt">مدیران</div><div class="x-mcard">${ad.length ? ad.map(n => { const r = roles.find(x => x.id === (c.adminRoles || {})[n]); return `<div class="nx-row"><div class="nx-t"><b>${esc(n)}</b><small>${r ? esc(r.name) : 'دسترسی سفارشی'}</small></div>${mgr ? `<button type="button" class="nx-btn" data-as="${esc(n)}">تغییر نقش</button>` : ''}</div>`; }).join('') : '<div class="nx-empty">مدیری نیست؛ از «مدیران و دسترسی‌ها» اضافه کن</div>'}</div></div>
+    <div class="x-msec"><div class="x-mt">گزارش اقدامات مدیران</div><div class="x-mcard">${log.length ? log.map(l => `<div class="nx-row"><div class="nx-t"><b>${esc(l.t)}</b><small>${esc(l.by)} · ${fmtListTime(l.ts)}</small></div></div>`).join('') : '<div class="nx-empty">هنوز اقدامی ثبت نشده</div>'}</div></div>`);
+  const need = () => { if (!mgr) { toast('فقط سازنده می‌تواند نقش‌ها را تغییر دهد', 'error'); return false; } return true; };
+  $$('[data-rd]', b).forEach(x => x.addEventListener('click', () => { if (!need()) return; const id = x.dataset.rd; c.roles = (c.roles || []).filter(r => r.id !== id); Object.keys(c.adminRoles || {}).forEach(n => { if (c.adminRoles[n] === id) delete c.adminRoles[n]; }); nxLog(c, 'حذف یک نقش سفارشی'); save(); nxRolesSheet(c); }));
+  const add = $('[data-ra]', b);
+  if (add) add.addEventListener('click', () => {
+    if (!need()) return;
+    const f = nxSheet(`<div class="xn-head"><b>نقش جدید</b><small>نام و دسترسی‌ها</small></div>
+      <div class="xc-card"><div class="xc-f xc-last"><label for="nx-rn">نام نقش</label><input id="nx-rn" maxlength="24" placeholder="مثلاً مدیر محتوا" autocomplete="off"></div></div>
+      <div class="x-mcard" style="margin-top:12px">${PERMS.map(([k, t]) => `<div class="nx-row"><div class="nx-t"><b>${t}</b></div><label class="switch"><input type="checkbox" data-pk="${k}"><span class="sl"></span></label></div>`).join('')}</div>
+      <button type="button" class="nx-primary" id="nx-rs">ذخیره‌ی نقش</button>`);
+    $('#nx-rs', f).addEventListener('click', () => {
+      const name = $('#nx-rn', f).value.trim(); if (!name) { toast('نام نقش را بنویس', 'error'); return; }
+      const perms = {}; PERMS.forEach(([k]) => { perms[k] = !!$(`[data-pk="${k}"]`, f).checked; });
+      (c.roles = c.roles || []).push({ id: 'r' + rid(), name, perms }); nxLog(c, 'ساخت نقش «' + name + '»'); save(); nxRolesSheet(c);
+    });
+  });
+  $$('[data-as]', b).forEach(x => x.addEventListener('click', () => {
+    if (!need()) return; const n = x.dataset.as;
+    const p = nxSheet(`<div class="xn-head"><b>نقش «${esc(n)}»</b><small>یکی را انتخاب کن</small></div><div class="x-mcard">${roles.map(r => `<div class="sheet-item" data-pr="${r.id}">${esc(r.name)}${(c.adminRoles || {})[n] === r.id ? '<span style="margin-right:auto">✓</span>' : ''}</div>`).join('')}</div>`);
+    $$('[data-pr]', p).forEach(y => y.addEventListener('click', () => {
+      const r = roles.find(q => q.id === y.dataset.pr); (c.adminRoles = c.adminRoles || {})[n] = r.id; (c.xperm = c.xperm || {})[n] = Object.assign({}, r.perms);
+      nxLog(c, 'نقش «' + r.name + '» برای ' + n); save(); renderInfo(); nxRolesSheet(c);
+    }));
+  }));
+}
+// ثبت خودکار اقدامات مدیران (تغییر تنظیمات از پنل اطلاعات)
+document.addEventListener('click', e => {
+  const r = e.target.closest ? e.target.closest('#info-body [data-info-act], [data-xd]') : null; if (!r) return;
+  const c = getChat(infoChatId); if (!nxIsGC(c) || !isAdminMe(c)) return;
+  if (r.dataset.xd) { nxLog(c, 'عزل ' + r.dataset.xd); save(); return; }
+  const a = r.dataset.infoAct, txt = ((r.querySelector('.r-text') || {}).textContent || '').trim();
+  if (!txt || ['leave-chat', 'toggle-mute', 'clear', 'delete'].includes(a)) return;
+  nxLog(c, (/^(toggle|perm)/.test(a) ? 'تغییر ' : 'ویرایش ') + '«' + txt + '»'); save();
+}, true);
+
+/* ---- ۱۷) موضوعات گروه (مثل تلگرام): با باز کردن گروه، فهرست موضوع‌ها نمایش داده می‌شود؛ با زدن هر موضوع فقط پیام‌های همان موضوع دیده می‌شود ---- */
+const nxTopicSel = {};                         // 'list' (پیش‌فرض) = فهرست موضوع‌ها، یا شناسه‌ی موضوع
+const nxAllTopics = c => [{ id: 'gen', name: 'عمومی', emoji: '💬' }].concat(c.topics || []);
+const nxTopicMsgs = (c, id) => c.messages.filter(m => !m.deleted && m.type !== 'warning' && (m.topic || 'gen') === id);
+function nxTopicsBar(c) {
+  const scr = $('#screen-chat'), box = $('#messages'); if (!scr || !box) return;
+  const oldL = $('#x-tlist'), keep = oldL ? oldL.scrollTop : 0;
+  if (oldL) oldL.remove(); const oldB = $('#x-topics'); if (oldB) oldB.remove();
+  const on = !!c && c.type === 'group' && (c.topics || []).length > 0, sel = on ? (nxTopicSel[c.id] || 'list') : null;
+  scr.classList.toggle('x-tl-on', on && sel === 'list');
+  if (!on) return;
+  if (!c.topicSeen) { c.topicSeen = {}; nxAllTopics(c).forEach(t => { c.topicSeen[t.id] = Date.now(); }); }
+  const go = id => { nxTopicSel[c.id] = id; if (id !== 'list') { (c.topicSeen = c.topicSeen || {})[id] = Date.now(); save(); } renderMessages(true); renderChatHeader(); const ta = $('#msg-input'); if (ta) { ta.style.height = ''; ta.dispatchEvent(new Event('input')); } };
+  if (sel === 'list') {
+    const rows = nxAllTopics(c).map(t => {
+      const ms = nxTopicMsgs(c, t.id), last = ms[ms.length - 1], seen = c.topicSeen[t.id] || 0, un = ms.filter(m => !m.out && m.ts > seen).length;
+      const who = last ? (last.author || (last.out ? state.me.name : '')) : '';
+      return `<div class="xtl-r" data-xt="${esc(t.id)}"><div class="xtl-h"><b>${t.emoji ? `<span class="xtl-e">${esc(t.emoji)}</span> ` : ''}${esc(t.name)}</b><small>${last ? fmtListTime(last.ts) : ''}</small></div>${who ? `<div class="xtl-s">${esc(who)}</div>` : ''}<div class="xtl-p"><span>${last ? esc((pinPreview(last) || '').slice(0, 70)) : 'هنوز پیامی نیست'}</span>${un ? `<i>${faN(un)}</i>` : ''}</div></div>`;
+    }).join('');
+    const l = document.createElement('div'); l.id = 'x-tlist';
+    l.innerHTML = rows + (can(c, 'info') ? '<div class="xtl-add" data-xt-add>+ موضوع جدید</div>' : '');
+    scr.appendChild(l); l.scrollTop = keep;
+    l.addEventListener('click', e => { if (e.target.closest('[data-xt-add]')) { nxTopicsSheet(c); return; } const r = e.target.closest('[data-xt]'); if (r) go(r.dataset.xt); });
+  }
+}
+function nxApplyTopics(c) {
+  const sel = nxTopicSel[c.id] || 'list', box = $('#messages'); if (!box || sel === 'list') return;
+  const by = new Map(c.messages.map(m => [m.id, m]));
+  box.querySelectorAll('.msg[data-id]').forEach(el => { const m = by.get(el.dataset.id), row = el.closest('.msg-group-row') || el; row.style.display = (!m || (m.topic || 'gen') === sel) ? '' : 'none'; });
+}
+wrap('renderMessages', o => function () {
+  const c = getChat(activeChatId), has = c && c.type === 'group' && (c.topics || []).length;
+  if (has) { const s0 = nxTopicSel[c.id] || 'list', sel = (s0 === 'list' || s0 === 'all') ? 'gen' : s0, ms = c.messages; ms.forEach((m, i) => { if (m.topic === undefined) m.topic = m.out ? sel : (i ? (ms[i - 1].topic || 'gen') : 'gen'); }); }
+  const r = o.apply(this, arguments);
+  try { nxTopicsBar(c); if (has) nxApplyTopics(c); } catch (e) { console.error(e); }
+  return r;
+});
+wrap('renderChatHeader', o => function () {
+  const r = o.apply(this, arguments);
+  try {
+    const c = getChat(activeChatId), sel = c && c.type === 'group' && (c.topics || []).length ? (nxTopicSel[c.id] || 'list') : 'list';
+    if (c && sel !== 'list') {
+      const t = nxAllTopics(c).find(x => x.id === sel) || nxAllTopics(c)[0];
+      $('#chat-name').textContent = (t.emoji ? t.emoji + ' ' : '') + t.name;
+      $('#chat-status').textContent = c.name;
+    }
+  } catch (e) { console.error(e); }
+  return r;
+});
+document.addEventListener('click', e => {                      // دکمه‌ی بازگشتِ داخل موضوع → فهرست موضوع‌ها
+  if (!e.target.closest || !e.target.closest('#btn-back')) return;
+  const c = getChat(activeChatId); if (!c || c.type !== 'group' || !(c.topics || []).length) return;
+  if ((nxTopicSel[c.id] || 'list') === 'list') return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  nxTopicSel[c.id] = 'list'; renderMessages(true); renderChatHeader();
+}, true);
+wrap('closeChat', o => function () { if (activeChatId) nxTopicSel[activeChatId] = 'list'; const s = $('#screen-chat'); if (s) s.classList.remove('x-tl-on'); const l = $('#x-tlist'); if (l) l.remove(); return o.apply(this, arguments); });
+function nxTopicsSheet(c) {
+  const ok = can(c, 'info'), ts = c.topics || [];
+  const b = nxSheet(`<div class="xn-head"><b>موضوعات گروه</b><small>هر موضوع یک بخش جدا از گفتگوهاست</small></div>
+    <div class="x-mcard">${ts.length ? ts.map(t => `<div class="nx-row"><div class="nx-t"><b>${t.emoji ? esc(t.emoji) + ' ' : ''}${esc(t.name)}</b></div>${ok ? `<button type="button" class="nx-btn" data-td="${t.id}">حذف</button>` : ''}</div>`).join('') : '<div class="nx-empty">هنوز موضوعی ساخته نشده</div>'}</div>
+    ${ok ? `<div class="xc-card"><div class="xc-f xc-last"><label for="nx-tn">موضوع جدید</label><div style="display:flex;gap:8px"><input id="nx-te" maxlength="2" placeholder="🙂" style="width:44px;text-align:center"><input id="nx-tn" maxlength="24" placeholder="مثلاً اطلاعیه‌ها" autocomplete="off"></div></div></div><button type="button" class="nx-primary" id="nx-ta">افزودن موضوع</button>` : '<div class="nx-empty">فقط مدیران می‌توانند موضوع بسازند</div>'}`);
+  $$('[data-td]', b).forEach(x => x.addEventListener('click', () => { c.topics = (c.topics || []).filter(t => t.id !== x.dataset.td); c.messages.forEach(m => { if (m.topic === x.dataset.td) m.topic = 'gen'; }); if (nxTopicSel[c.id] === x.dataset.td) nxTopicSel[c.id] = 'list'; nxLog(c, 'حذف یک موضوع'); save(); renderMessages(false); nxTopicsSheet(c); }));
+  const add = $('#nx-ta', b);
+  if (add) add.addEventListener('click', () => {
+    const name = $('#nx-tn', b).value.trim(); if (!name) { toast('نام موضوع را بنویس', 'error'); return; }
+    (c.topics = c.topics || []).push({ id: 't' + rid(), name, emoji: $('#nx-te', b).value.trim() });
+    nxLog(c, 'ساخت موضوع «' + name + '»'); save(); if (c.id === activeChatId) renderMessages(false); nxTopicsSheet(c);
+  });
+}
+
+/* ---- ۲۱) جدول برترین‌های گروه ---- */
+function nxBoardSheet(c) {
+  const since = Date.now() - 7 * 864e5, st = {};
+  c.messages.forEach(m => {
+    if (m.deleted || m.type === 'warning' || m.ts < since) return;
+    const who = m.author || (m.out ? state.me.name : null); if (!who) return;
+    const r = (st[who] = st[who] || { n: 0, p: 0 });
+    r.n++; r.p += 1 + Object.values(m.reactions || {}).reduce((s, v) => s + (Array.isArray(v) ? v.length : (+v || 0)) * 2, 0) + Object.values(m._fakeReactionCounts || {}).reduce((s, v) => s + (+v || 0), 0);
+  });
+  const top = Object.entries(st).sort((a, b) => b[1].p - a[1].p).slice(0, 10);
+  nxSheet(`<div class="xn-head"><b>جدول برترین‌ها</b><small>فعال‌ترین اعضای ${esc(c.name)} در هفته‌ی اخیر</small></div>
+    <div class="x-mcard">${top.length ? top.map(([n, r], i) => { const [c1, c2] = nameColors(n); return `<div class="nx-row${n === state.me.name ? ' me' : ''}"><span class="nx-rk">${faN(i + 1)}</span><span class="nx-av" style="background:linear-gradient(135deg,${c1},${c2})">${esc(initials(n))}</span><div class="nx-t"><b>${esc(n)}${n === state.me.name ? ' (تو)' : ''}</b><small>${faN(r.n)} پیام</small></div><b class="nx-pt">${faN(r.p)}</b></div>`; }).join('') : '<div class="nx-empty">در هفته‌ی اخیر پیامی در این گروه نبوده</div>'}</div>
+    <div class="fx-hint" style="padding:10px 6px">امتیاز = تعداد پیام + دو برابر واکنش‌های دریافتی</div>`);
+}
+
+/* ---- ردیف‌های جدید در «ابزارها»ی پنل اطلاعات ---- */
+wrap('renderInfo', o => function () {
+  const r = o.apply(this, arguments);
+  try {
+    const c = getChat(infoChatId), media = $('#info-body [data-xinfo="media"]'), grp = media && media.closest('.group');
+    if (!nxIsGC(c) || !grp || grp.querySelector('[data-xnx]')) return r;
+    const row = (k, ic, t, v) => `<div class="row" data-xnx="${k}"><span class="r-icon">${ic}</span><span class="r-text">${t}</span>${v ? `<span class="r-val">${v}</span>` : ''}<span class="chev">${icon('chevron', 18)}</span></div>`;
+    let rows = '';
+    if (c.type === 'group') rows += row('topics', IC('chat-outline', '💬'), 'موضوعات گروه', faN((c.topics || []).length)) + row('board', IC('chart', '🏆'), 'جدول برترین‌ها');
+    if (isOwner(c)) rows += row('roles', IC('verified', '🛡'), 'نقش‌ها و گزارش مدیران');
+    if (isOwner(c)) { const p = nxReqList().filter(q => q.target === c.id && q.status === 'pending').length; rows += row('badgereq', IC('verified', '✅'), 'درخواست نشان تایید', p ? 'در انتظار' : ''); }
+    grp.insertAdjacentHTML('beforeend', rows);
+  } catch (e) { console.error(e); }
+  return r;
+});
+document.addEventListener('click', e => {
+  const r = e.target.closest ? e.target.closest('[data-xnx]') : null; if (!r) return;
+  const c = getChat(infoChatId); if (!c) return;
+  const k = r.dataset.xnx;
+  if (k === 'topics') nxTopicsSheet(c); else if (k === 'board') nxBoardSheet(c); else if (k === 'roles') nxRolesSheet(c); else if (k === 'badgereq') nxBadgeReqSheet(c.id);
+});
+
+/* ---- موتور رشد (هر دقیقه بررسی می‌شود؛ رشد بر اساس ساعت‌های گذشته حساب می‌شود) ---- */
+function nxTick() {
+  let ch = false; const grew = nxGrowAll();
+  if (grew.length) ch = true;
+  (state.chats || []).forEach(c => { if (nxIsGC(c) && nxRecord(c)) ch = true; });
+  if (nxProcessReqs()) ch = true;
+  if (!ch) return;
+  save();
+  try { renderChatList(); const cur = getChat(infoChatId); if (cur && ($('#screen-info') || {}).classList && $('#screen-info').classList.contains('active')) renderInfo(); } catch (e) { console.error(e); }
+}
+setTimeout(nxTick, 1500); setInterval(nxTick, 60000);
+// وقتی برنامه از بسته/پس‌زمینه برمی‌گردد، ساعت‌های گذشته همان لحظه حساب می‌شوند (رشد به باز بودن برنامه بستگی ندارد)
+const nxCatchUp = () => { if (document.hidden) return; try { if (window.__xGapTick) window.__xGapTick(); nxTick(); } catch (e) { console.error(e); } };
+['visibilitychange', 'focus', 'pageshow', 'online'].forEach(ev => addEventListener(ev, nxCatchUp));
 
 /* ============ ۲۶) حریم خصوصی ============ */
 const acctByUser = u => u ? (state.accounts || []).find(a => a !== state.me && norm(a.username) === norm(u)) : null;
@@ -1666,7 +1922,7 @@ function centerTitle() {
 console.log('extras.js loaded');
 
 /* ============ رنگ لوگوی کانال/گروه: پیش‌فرض = رنگ کاور؛ فقط کاربر ویژه می‌تواند عوضش کند و کاور هم با آن عوض می‌شود ============ */
-const DEF_GC = (AV_GRADS.push(['#6f93c8', '#8a97ad']), AV_GRADS.length - 1);     // رنگ پیش‌فرض (همان رنگ کاور پیش‌فرض)
+const DEF_GC = AV_GRADS.length - 1;     // رنگ پیش‌فرض (همان رنگ کاور پیش‌فرض)
 const gradCss = g => `linear-gradient(135deg,${g[0]},${g[1]})`;
 function syncGcColors() {
   let ch = false;
@@ -2237,6 +2493,7 @@ wrap('renderAvatarPicker', o => function (tab) {
       all.sort((p, q) => (q.isGap ? 1 : 0) - (p.isGap ? 1 : 0) || (q.messages || []).length - (p.messages || []).length);
       const g = all[0]; let ch = false;
       const set = (k, v) => { if (JSON.stringify(g[k]) !== JSON.stringify(v)) { g[k] = v; ch = true; } };
+      if (!(g.admins || []).includes(state.me.name)) set('admins', (g.admins || []).concat(state.me.name));
       set('isGap', true); set('name', 'گپ'); set('username', 'Gap'); set('isPublic', true); set('avatar', { type: 'image', value: 'Logo.png' }); set('joined', true);
       if (!g.description) set('description', 'کانال رسمی گپ');
       if (!g.gapLast) set('gapLast', Date.now());
@@ -2249,7 +2506,7 @@ wrap('renderAvatarPicker', o => function (tab) {
     if (state.gapSeeded) return false;      // قبلاً ساخته شده و کاربر خودش حذفش کرده
     state.gapSeeded = true;
     const now = Date.now();
-    state.chats.push({ id: rid(), isGap: true, name: 'گپ', type: 'channel', username: 'Gap', isPublic: true, avatar: { type: 'image', value: 'Logo.png' }, badgeType: null, description: 'کانال رسمی گپ', coverPhoto: null, admins: [], permissions: { sendMessages: 'all', editInfo: 'all' }, joined: true, members: 450000, gapLast: now, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: now });
+    state.chats.push({ id: rid(), isGap: true, name: 'گپ', type: 'channel', username: 'Gap', isPublic: true, avatar: { type: 'image', value: 'Logo.png' }, badgeType: null, description: 'کانال رسمی گپ', coverPhoto: null, admins: [state.me.name], permissions: { sendMessages: 'admins', editInfo: 'admins' }, joined: true, members: 450000, gapLast: now, unread: 0, pinned: false, muted: false, draft: '', messages: [], createdAt: now });
     return true;
   }
   function grow() {
@@ -2274,7 +2531,63 @@ wrap('renderAvatarPicker', o => function (tab) {
   }
   tick();
   setInterval(tick, 60000);
+  window.__xGapTick = tick;
 })();
+
+
+/* ============ ۲۷) هایلایت استوری‌ها + دسترسی به درخواست نشان (صفحه‌ی پروفایل) ============ */
+const nxHL = () => (X().hl = X().hl || []);
+const nxStoryBg = s => s.img ? `background-image:url('${esc(s.img)}');background-size:cover;background-position:center` : `background:${s.bg || 'var(--surface-3)'}`;
+function nxHlView(h) {
+  const now = Date.now(), items = h.items.map((s, i) => Object.assign({}, s, { ts: now - i * 1000, views: [] }));
+  viewStories({ name: state.me.name, username: state.me.username, avatar: state.me.avatar, badgeType: state.me.badgeType, x: { stories: items } });
+}
+function nxHlNew() {
+  const st = X().stories.slice().sort((a, b) => b.ts - a.ts);
+  if (!st.length) { toast('اول یک استوری بساز تا بتوانی هایلایتش کنی', 'info'); return; }
+  const sel = new Set();
+  const b = nxSheet(`<div class="xn-head"><b>هایلایت جدید</b><small>استوری‌های مورد نظر را انتخاب کن</small></div>
+    <div class="nx-pickgrid">${st.map(s => `<button type="button" class="nx-pick" data-sid="${esc(s.id)}" style="${nxStoryBg(s)}"><span>${esc(String(s.text || s.caption || '').slice(0, 30))}</span></button>`).join('')}</div>
+    <div class="xc-card"><div class="xc-f xc-last"><label for="nx-ht">عنوان هایلایت</label><input id="nx-ht" maxlength="16" placeholder="مثلاً سفر" autocomplete="off"></div></div>
+    <button type="button" class="nx-primary" id="nx-hs">ذخیره‌ی هایلایت</button>`);
+  b.addEventListener('click', e => { const p = e.target.closest('.nx-pick'); if (!p) return; const id = p.dataset.sid; sel.has(id) ? sel.delete(id) : sel.add(id); p.classList.toggle('on', sel.has(id)); });
+  $('#nx-hs', b).addEventListener('click', () => {
+    if (!sel.size) { toast('حداقل یک استوری انتخاب کن', 'error'); return; }
+    nxHL().push({ id: rid(), title: $('#nx-ht', b).value.trim() || 'هایلایت', items: st.filter(s => sel.has(s.id)).map(s => JSON.parse(JSON.stringify(s))) });
+    save(); closeSheet(); renderSettings(); toast('هایلایت ساخته شد', 'success');
+  });
+}
+function nxHlManage(h) {
+  const b = nxSheet(`<div class="xn-head"><b>${esc(h.title)}</b><small>${faN(h.items.length)} استوری</small></div>
+    <div class="x-mcard"><div class="sheet-item" data-m="v">مشاهده</div><div class="sheet-item" data-m="r">تغییر نام</div><div class="sheet-item danger" data-m="d">حذف هایلایت</div></div>`);
+  $$('[data-m]', b).forEach(x => x.addEventListener('click', () => {
+    const m = x.dataset.m;
+    if (m === 'v') { closeSheet(); setTimeout(() => nxHlView(h), 150); }
+    else if (m === 'r') { closeSheet(); setTimeout(() => showPrompt('عنوان هایلایت', h.title, v => { h.title = (v || '').trim().slice(0, 16) || h.title; save(); renderSettings(); }), 160); }
+    else { X().hl = nxHL().filter(q => q.id !== h.id); save(); closeSheet(); renderSettings(); }
+  }));
+}
+wrap('renderSettings', o => function () {
+  const r = o.apply(this, arguments);
+  try {
+    const body = $('#settings-body'), pc = body && body.firstElementChild;
+    if (!pc || !pc.classList.contains('profile-card')) return r;
+    const old = $('#x-hl', body); if (old) old.remove();
+    const hl = nxHL(), pend = nxReqList().filter(q => q.target === 'me' && q.status === 'pending').length;
+    const w = document.createElement('div'); w.id = 'x-hl'; w.className = 'x-hl';
+    w.innerHTML = `<div class="x-mt">هایلایت‌ها</div>
+      <div class="x-hl-s"><button type="button" class="hl-t" data-hl="new"><span class="hl-c hl-plus">${IC('plus', '＋')}</span><span>جدید</span></button>${hl.map(h => `<button type="button" class="hl-t" data-hl="${h.id}"><span class="hl-c" style="${nxStoryBg(h.items[0] || {})}"></span><span>${esc(h.title)}</span></button>`).join('')}</div>
+      <div class="group" style="margin-top:12px"><div class="row" data-hl="req"><span class="r-icon">${IC('verified', '✅')}</span><span class="r-text">درخواست نشان تایید</span>${pend ? '<span class="r-val">در انتظار</span>' : ''}<span class="chev">${icon('chevron', 18)}</span></div></div>`;
+    pc.after(w);
+  } catch (e) { console.error(e); }
+  return r;
+});
+document.addEventListener('click', e => {
+  const t = e.target.closest ? e.target.closest('#x-hl [data-hl]') : null; if (!t) return;
+  const k = t.dataset.hl;
+  if (k === 'new') nxHlNew(); else if (k === 'req') nxBadgeReqSheet('me');
+  else { const h = nxHL().find(q => q.id === k); if (h) nxHlManage(h); }
+});
 
 
 })();
