@@ -5,7 +5,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // سقف تعداد اعضای هر کانال = تعداد اعضای کانال رسمی «گپ» (هر چه آن بزرگ‌تر شود، سقف هم بالاتر می‌رود)
-function memberCap(c) { if (!c || (c.type !== 'channel' && c.type !== 'group')) return 9999999; const g = (state.chats || []).find(x => x.type === 'channel' && (x.isGap || String(x.username || '').replace(/^@/, '').toLowerCase() === 'gap')); return g ? Math.max(1, g.members || 0) : 9999999; }
+function memberCap(c) { if (!c || (c.type !== 'channel' && c.type !== 'group')) return 9999999; const g = (state.chats || []).find(x => x.type === 'channel' && (x.isGap || String(x.username || '').replace(/^@/, '').toLowerCase() === 'gap')); return g ? Math.max(1, Math.floor((g.members || 0) * 0.9)) : 9999999; }   // ۱۰٪ کمتر از بزرگ‌ترین کانال (گپ)؛ هیچ کانال/گروهی به سقف نمی‌رسد
 const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const icon = (n, s = 20) => `<svg width="${s}" height="${s}"><use href="#i-${n}"/></svg>`;
@@ -57,7 +57,8 @@ const CHANGELOG = [
 const AV_GRADS = [
   ['#ff6b6b','#c92a2a'],['#51cf66','#2b8a3e'],['#ffd43b','#e67700'],['#4dabf7','#1864ab'],
   ['#b197fc','#5f3dc4'],['#ff8cc8','#c2255c'],['#63e6be','#087f5b'],['#ffa94d','#d9480f'],
-  ['#845ef7','#5f3dc4'],['#20c997','#0ca678'],['#f783ac','#a61e4d'],['#74c0fc','#1971c2']
+  ['#845ef7','#5f3dc4'],['#20c997','#0ca678'],['#f783ac','#a61e4d'],['#74c0fc','#1971c2'],
+  ['#6f93c8','#8a97ad']   // رنگ پیش‌فرض کانال/گروه (هم‌رنگ کاور پیش‌فرض) – همیشه آخرین عضو
 ];
 const AV_EMOJIS = ['😎','🥰','😮','🤓','🧐','🥳','😺','🦊','🐼','🐨','🦁','🐯','🦄','🐧','🐢','🐣','🌴','🌺','🌊','⚡','💎','🔥','⭐','🎜','🚀','🎨','🎵','📷','🍕','☕','🍀','🌿'];
 const QUICK_REACT = ['❤️','😂','👍','🔥','😍','😮','😢','🙏'];
@@ -381,7 +382,7 @@ function checkCanSend(chat) {
   if (!chat) return false;
   if (isWarnerChat(chat)) { toast('امکان ارسال پیام به این کاربر وجود ندارد', 'error'); return false; }
   if (chat.permissions && chat.permissions.sendMessages === 'admins' && (chat.type === 'group' || chat.type === 'channel')
-      && !(chat.admins || []).includes(state.me.name)) { toast('فقط مدیران می‌توانند پیام بفرستند', 'error'); return false; }
+      && !(chat.admins || []).includes(state.me.name) && !(!chat.owner || chat.owner.name === state.me.name)) { toast('فقط مدیران می‌توانند پیام بفرستند', 'error'); return false; }
   return true;
 }
 async function prepareImage(file) {
@@ -2351,7 +2352,7 @@ function sendMessage(extra = {}, textOverride, chatIdOverride) {
   if (chat.permissions && chat.permissions.sendMessages === 'admins'
       && (chat.type === 'group' || chat.type === 'channel')) {
     const myName = state.me.name;
-    const isAdmin = (chat.admins || []).includes(myName);
+    const isAdmin = (chat.admins || []).includes(myName) || !chat.owner || chat.owner.name === myName;   // سازنده همیشه می‌تواند بنویسد
     if (!isAdmin) { toast('فقط مدیران می‌توانند پیام بفرستند', 'error'); return; }
   }
   const m = Object.assign({
