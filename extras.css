@@ -823,3 +823,76 @@ html[data-theme="light"] #sheet-content.x-stats.x-glass{background:#f6f6f9!impor
 .av-grid button.av-color.sel::after{content:"";position:absolute;inset:0;margin:auto;width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.92)}
 .xc-lock{display:flex;align-items:center;justify-content:center;gap:7px;font-size:12.5px;color:var(--text-3);text-align:center}
 .xc-lock svg{fill:var(--text-3);flex-shrink:0}
+
+
+/* ===== رنگ‌های لوگو: کوچک‌تر ===== */
+.xc-sw{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:300px;width:auto}
+.xc-dot{width:30px;height:30px;border-radius:10px}
+.xc-dot.on{transform:scale(1.12)}
+.xc-dot.on::after{width:7px;height:7px}
+.av-grid:has(.av-color){grid-template-columns:repeat(7,1fr);gap:9px 6px;justify-items:center}
+.av-grid button.av-color{width:30px;height:30px;border-radius:10px}
+.av-grid button.av-color.sel::after{width:7px;height:7px}
+
+/* ===== عکس پروفایل: بدون حاشیه‌ی دورش (صفحه‌ی پروفایل، اطلاعات کانال/گروه/مخاطب و پیش‌نمایش) ===== */
+.profile-card .avatar,.info-hero .avatar,#profile-body .info-hero .avatar{border:none!important;outline:none!important;box-shadow:none!important}
+
+
+/* ===== پنل‌های جدید: نقش‌ها، موضوعات، برترین‌ها، درخواست نشان، هایلایت (مینیمال) ===== */
+.nx-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.nx-row:last-child{border-bottom:none}
+.nx-row.me{background:var(--surface-3)}
+.nx-t{flex:1;min-width:0}
+.nx-t b{display:block;font-size:14.5px;font-weight:700}
+.nx-t small{display:block;margin-top:2px;color:var(--text-3);font-size:12px;line-height:1.6}
+.nx-empty{padding:18px 14px;text-align:center;color:var(--text-3);font-size:13px}
+.nx-btn{border:none;border-radius:12px;padding:8px 14px;background:var(--surface-3);color:var(--text);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.nx-wide{width:100%;margin-top:8px;padding:11px}
+.nx-primary{width:100%;margin-top:16px;border:none;border-radius:18px;padding:15px;font:inherit;font-size:16px;font-weight:800;color:var(--bg);background:var(--text);cursor:pointer}
+.nx-primary:active{transform:scale(.98)}
+.nx-st{font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--surface-3);color:var(--text-2);white-space:nowrap}
+.nx-st.approved{color:#4ade80}.nx-st.rejected{color:var(--red)}
+.nx-chips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px}
+.nx-chip{border:1px solid var(--line-2);background:var(--surface-2);color:var(--text-2);font:inherit;font-size:13.5px;font-weight:700;padding:9px 14px;border-radius:14px;cursor:pointer}
+.nx-chip.on{background:var(--text);color:var(--bg);border-color:transparent}
+.nx-rk{width:22px;text-align:center;font-weight:800;color:var(--text-3)}
+.nx-av{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;flex-shrink:0}
+.nx-pt{font-size:15px;font-weight:800}
+#sheet-content.x-fs .xc-card{margin-top:8px}
+#sheet-content.x-fs .xc-f input,#sheet-content.x-fs .xc-f textarea{width:100%;background:transparent;border:none;outline:none;color:var(--text);font:inherit;font-size:16px;padding:0;resize:none;text-align:right}
+
+/* موضوعات گروه (مثل تلگرام) */
+#x-tlist{position:absolute;left:0;right:0;top:0;bottom:0;overflow-y:auto;background:var(--bg);z-index:7;padding:calc(var(--fx-h,48px) + 14px) 10px 24px;scrollbar-width:none}
+#screen-chat.x-tl-on #messages{visibility:hidden}
+#x-tlist::-webkit-scrollbar{display:none}
+.xtl-r{display:block;padding:13px 6px 12px;border-bottom:1px solid var(--line);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.xtl-r:active{background:var(--surface-2)}
+.xtl-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.xtl-h b{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.xtl-e{font-size:17px}
+.xtl-h small{color:var(--text-3);font-size:12px;flex-shrink:0}
+.xtl-s{margin-top:5px;font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xtl-p{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;color:var(--text-3);font-size:13.5px;min-height:22px}
+.xtl-p span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.xtl-p i{font-style:normal;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:#3b82f6;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.xtl-add{margin:14px 6px 0;padding:13px;text-align:center;border-radius:16px;background:var(--surface-2);color:var(--text-2);font-size:14px;font-weight:700;cursor:pointer}
+#screen-chat.x-tl-on .pin-bar,#screen-chat.x-tl-on #pin-circle{display:none!important}
+/* کادر پیام در فهرست موضوع‌ها فقط نامرئی می‌شود (display:none ارتفاع کادر را صفر می‌کرد و بعداً فقط یک نقطه دیده می‌شد) */
+#screen-chat.x-tl-on #composer{visibility:hidden!important;pointer-events:none!important}
+
+/* هایلایت‌ها در صفحه‌ی پروفایل */
+.x-hl{margin:16px 0 4px}
+.x-hl-s{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 2px;scrollbar-width:none}
+.x-hl-s::-webkit-scrollbar{display:none}
+.hl-t{flex-shrink:0;width:62px;display:flex;flex-direction:column;align-items:center;gap:7px;border:none;background:transparent;color:var(--text-2);font:inherit;font-size:11.5px;cursor:pointer}
+.hl-t span:last-child{max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hl-c{width:56px;height:56px;border-radius:18px;background:var(--surface-3);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center}
+.hl-plus svg{fill:var(--text-2);width:22px;height:22px}
+.nx-pickgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:260px;overflow:auto;margin-bottom:8px}
+.nx-pick{position:relative;aspect-ratio:3/4;border:none;border-radius:14px;color:#fff;font:inherit;font-size:11px;padding:8px;display:flex;align-items:flex-end;text-align:right;cursor:pointer;overflow:hidden}
+.nx-pick.on{outline:3px solid var(--text);outline-offset:-3px}
+
+
+/* ===== هم‌عرض شدن هدر و منوی دسته‌بندی: نوار اسکرول مزاحم عرض را کم می‌کرد ===== */
+.tab-body,.info-body,#messages,#settings-body{scrollbar-width:none;-ms-overflow-style:none}
+.tab-body::-webkit-scrollbar,.info-body::-webkit-scrollbar,#messages::-webkit-scrollbar,#settings-body::-webkit-scrollbar{display:none;width:0;height:0}
