@@ -95,7 +95,15 @@ const COUNTRIES = [
 let COUNTRY = COUNTRIES[0];
 
 // پرچم‌ها از flags.js (داخل خود برنامه) خوانده می‌شوند؛ اگر پرچمی نبود کد دوحرفی نشان داده می‌شود
-const FLAGS = window.GAP_FLAGS || {}, FRATIO = window.GAP_FLAG_RATIO || {};
+// flags.js (۹۰ کیلوبایت) فقط وقتی صفحه‌ی ورود/انتخاب کشور لازم شد لود می‌شود؛ شروع برنامه را کند نمی‌کند
+const FLAGS = new Proxy({}, { get: (_, k) => (window.GAP_FLAGS || {})[k] }), FRATIO = new Proxy({}, { get: (_, k) => (window.GAP_FLAG_RATIO || {})[k] });
+let _flagsReq = false;
+function loadFlags() {
+    if (window.GAP_FLAGS || _flagsReq) return; _flagsReq = true;
+    const s = window.__gapFlagsEl || document.createElement('script'); if (!s.src) s.src = 'flags.js?v=fx6';
+    s.addEventListener('load', () => { try { const fl = $('au-cc-fl'); if (fl) fl.innerHTML = flagHTML(COUNTRY.cc, 18); if (sheet.classList.contains('show')) renderCountries($('au-csearch').value); } catch (e) {} });
+    if (!s.parentNode) document.head.appendChild(s);
+}
 function flagHTML(cc, h) {
     h = h || 18;
     const src = FLAGS[cc];
@@ -367,7 +375,7 @@ function go(step) {
     ROOT.scrollTop = 0; refreshBtn();
 }
 
-function open(dismissible) {
+function open(dismissible) { loadFlags();
     Object.assign(S, { phone: null, code: null, exp: 0, tries: 0, existing: null, dismissible: !!dismissible, attach: !dismissible });
     $('au-phone').value = ''; $('au-name').value = ''; $('au-handle').value = '';
     COUNTRY = COUNTRIES[0]; renderChip(); closeSheet(); $('au-cc').classList.remove('hid'); $('au-avatar').textContent = '؟'; $('au-avatar').style.background = '';
@@ -419,7 +427,7 @@ function renderCountries(q) {
         `<button type="button" class="au-crow ${c.cc === COUNTRY.cc ? 'sel' : ''}" data-cc="${c.cc}"><span class="au-fw">${flagHTML(c.cc, 20)}</span><span class="n">${c.fa}</span><span class="d">+${c.dial}</span></button>`
     ).join('') : '<div class="au-empty">کشوری پیدا نشد</div>';
 }
-function openSheet() { $('au-csearch').value = ''; renderCountries(''); sheet.classList.add('show'); setTimeout(() => $('au-csearch').focus(), 120); }
+function openSheet() { loadFlags(); $('au-csearch').value = ''; renderCountries(''); sheet.classList.add('show'); setTimeout(() => $('au-csearch').focus(), 120); }
 function closeSheet() { sheet.classList.remove('show'); }
 $('au-cc').addEventListener('click', openSheet);
 $('au-sheet-x').addEventListener('click', closeSheet);
