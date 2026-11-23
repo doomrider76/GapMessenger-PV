@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <script>try{var _s=JSON.parse(localStorage.getItem('pisfon_v3')||'{}');var _l=_s.theme==='light';if(_s.themeMode==='auto'&&window.matchMedia)_l=matchMedia('(prefers-color-scheme: light)').matches;if(_l){document.querySelector('meta[name="theme-color"]').content='#ffffff';document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content='default';document.documentElement.setAttribute('data-theme','light');}}catch(e){}</script>
+<script>try{if(!/"phone":"[^"]/.test(localStorage.getItem("pisfon_v3")||"")){var _f=document.createElement("script");_f.src="flags.js?v=fx6";_f.async=true;window.__gapFlagsEl=_f;document.head.appendChild(_f);}}catch(e){}</script>
 <meta name="format-detection" content="telephone=no">
 <meta name="color-scheme" content="dark light">
 <title>گپ</title>
@@ -16,13 +17,19 @@
 <link rel="icon" type="image/png" sizes="32x32" href="Logo.png">
 <link rel="manifest" href="manifest.json">
 
+<style>html,body{background:#131313}html[data-theme="light"],html[data-theme="light"] body{background:#fff}</style>
+<link rel="preload" as="font" type="font/ttf" href="Font.ttf" crossorigin>
 <link rel="stylesheet" href="style.css?v=media1">
-<link rel="stylesheet" href="extras.css?v=x21">
-<link rel="preload" as="image" href="blue-tick.png">
-<link rel="preload" as="image" href="green-tick.png">
-<link rel="preload" as="image" href="personal-tick.png">
-<link rel="preload" as="image" href="yellow-tick.png">
-<link rel="preload" as="image" href="vipgold.png">
+<link rel="stylesheet" href="extras.css?v=x28">
+<script src="script.js?v=v112" defer></script>
+<script src="auth.js?v=fx7" defer></script>
+<script src="features.js?v=fx6" defer></script>
+<script src="extras.js?v=x25" defer></script>
+<link rel="preload" as="image" href="blue-tick.png" fetchpriority="low">
+<link rel="preload" as="image" href="green-tick.png" fetchpriority="low">
+<link rel="preload" as="image" href="personal-tick.png" fetchpriority="low">
+<link rel="preload" as="image" href="yellow-tick.png" fetchpriority="low">
+<link rel="preload" as="image" href="vipgold.png" fetchpriority="low">
 </head>
 <body>
 
@@ -314,10 +321,5 @@
 
 <div id="toast"></div>
 
-<script src="script.js?v=v110" defer></script>
-<script src="flags.js?v=fx6" defer></script>
-<script src="auth.js?v=fx6" defer></script>
-<script src="features.js?v=fx6" defer></script>
-<script src="extras.js?v=x21" defer></script>
 </body>
 </html>
