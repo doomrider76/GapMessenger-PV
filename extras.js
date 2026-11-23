@@ -9,6 +9,7 @@
 'use strict';
 const GIPHY_KEY = '';   // اختیاری: کلید Giphy بگذار تا جستجوی آنلاین گیف فعال شود
 const faN = n => Number(n).toLocaleString('fa-IR');
+const NX_NEWUI = true;   // true = طراحی جدید پنل‌ها (منوی چت/«+»/اطلاعات/ساخت/آمار) · false = طراحی اولیه‌ی اپ
 const IC = (n, e) => document.getElementById('i-' + n) ? icon(n) : `<span style="width:20px;text-align:center;display:inline-block">${e}</span>`;
 const S = () => state.settings;
 const norm = u => String(u || '').replace(/^@/, '').trim().toLowerCase();
@@ -612,7 +613,7 @@ function statsSheet(c) {
   const best = per.indexOf(Math.max(...per));
   const wd = d => d.toLocaleDateString('fa-IR', { weekday: 'short' });
   const eTop = Object.entries(emo).sort((p, q) => q[1] - p[1]).slice(0, 5), em = Math.max(1, ...eTop.map(x => x[1]));
-  const kpi = (ic, col, v, l) => `<div class="k"><b>${v}</b><span>${l}</span></div>`;
+  const kpi = (ic, col, v, l) => NX_NEWUI ? `<div class="k"><b>${v}</b><span>${l}</span></div>` : `<div class="k"><i style="background:${col}">${ic}</i><b>${v}</b><span>${l}</span></div>`;
   openSheet(`<div class="sheet-title">آمار کانال</div>
     <div class="x-sth">${avatarHTML(c, 46)}<div><b>${esc(c.name)}</b><small>${faN(c.members || 0)} عضو</small></div><span class="x-sr">${faN(er)}٪ تعامل</span></div>
     <div class="x-sk">
@@ -629,7 +630,7 @@ function statsSheet(c) {
     ${eTop.length ? `<div class="x-sc2"><h4>پرطرفدارترین واکنش‌ها</h4>${eTop.map(([e, n]) => `<div class="x-er"><span class="e">${e}</span><span class="b"><i style="width:${Math.round(n / em * 100)}%"></i></span><span class="n">${faN(n)}</span></div>`).join('')}</div>` : ''}
     <div class="x-sc2"><h4>پست‌های ۷ روز گذشته${posts.length ? ` <small>· پرکارترین روز: ${wd(days[best])}</small>` : ''}</h4><div class="x-bars2 s">${per.map((n, i) => `<div class="c"><span class="v">${faN(n)}</span><i style="height:${Math.max(5, Math.round(n / mp * 100))}%"></i><span class="l">${esc(wd(days[i]))}</span></div>`).join('')}</div></div>
     <div class="fx-hint" style="padding:6px 18px 14px">${R ? 'حالت واقعی روشن است؛ بازدیدها فقط از داده‌ی واقعی شمرده می‌شوند.' : 'آمار از داده‌های همین دستگاه محاسبه می‌شود.'}</div>`);
-  const sh = $('#sheet-content'); if (sh) sh.classList.add('x-glass', 'x-stats');
+  const sh = $('#sheet-content'); if (sh) { sh.classList.add('x-glass'); if (NX_NEWUI) sh.classList.add('x-stats'); }
 }
 
 /* ============ ردیف‌های جدید صفحه‌ی اطلاعات ============ */
@@ -853,12 +854,18 @@ function nxTopicsSheet(c) {
   const ok = can(c, 'info'), ts = c.topics || [];
   const b = nxSheet(`<div class="xn-head"><b>موضوعات گروه</b><small>هر موضوع یک بخش جدا از گفتگوهاست</small></div>
     <div class="x-mcard">${ts.length ? ts.map(t => `<div class="nx-row"><div class="nx-t"><b>${t.emoji ? esc(t.emoji) + ' ' : ''}${esc(t.name)}</b></div>${ok ? `<button type="button" class="nx-btn" data-td="${t.id}">حذف</button>` : ''}</div>`).join('') : '<div class="nx-empty">هنوز موضوعی ساخته نشده</div>'}</div>
-    ${ok ? `<div class="xc-card"><div class="xc-f xc-last"><label for="nx-tn">موضوع جدید</label><div style="display:flex;gap:8px"><input id="nx-te" maxlength="2" placeholder="🙂" style="width:44px;text-align:center"><input id="nx-tn" maxlength="24" placeholder="مثلاً اطلاعیه‌ها" autocomplete="off"></div></div></div><button type="button" class="nx-primary" id="nx-ta">افزودن موضوع</button>` : '<div class="nx-empty">فقط مدیران می‌توانند موضوع بسازند</div>'}`);
+    ${ok ? `<div class="xc-card"><div class="xc-f"><label for="nx-te">ایموجی موضوع (الزامی)</label><input id="nx-te" placeholder="با کیبورد یک ایموجی بگذار" autocomplete="off"></div><div class="xc-f xc-last"><label for="nx-tn">نام موضوع</label><input id="nx-tn" maxlength="24" placeholder="مثلاً اطلاعیه‌ها" autocomplete="off"></div></div><button type="button" class="nx-primary" id="nx-ta">افزودن موضوع</button>` : '<div class="nx-empty">فقط مدیران می‌توانند موضوع بسازند</div>'}`);
   $$('[data-td]', b).forEach(x => x.addEventListener('click', () => { c.topics = (c.topics || []).filter(t => t.id !== x.dataset.td); c.messages.forEach(m => { if (m.topic === x.dataset.td) m.topic = 'gen'; }); if (nxTopicSel[c.id] === x.dataset.td) nxTopicSel[c.id] = 'list'; nxLog(c, 'حذف یک موضوع'); save(); renderMessages(false); nxTopicsSheet(c); }));
-  const add = $('#nx-ta', b);
+  const add = $('#nx-ta', b), EMO = /\p{Extended_Pictographic}(?:\u200d\p{Extended_Pictographic}|\ufe0f|\p{Emoji_Modifier})*/u;
+  const te = $('#nx-te', b);
+  if (te) {
+    te.addEventListener('input', () => { const m = te.value.match(EMO); te.value = m ? m[0] : ''; });      // فقط ایموجی قبول می‌شود
+  }
   if (add) add.addEventListener('click', () => {
+    const m = te.value.match(EMO), emoji = m ? m[0] : '';
+    if (!emoji) { toast('برای موضوع حتماً یک ایموجی انتخاب کن', 'error'); return; }
     const name = $('#nx-tn', b).value.trim(); if (!name) { toast('نام موضوع را بنویس', 'error'); return; }
-    (c.topics = c.topics || []).push({ id: 't' + rid(), name, emoji: $('#nx-te', b).value.trim() });
+    (c.topics = c.topics || []).push({ id: 't' + rid(), name, emoji });
     nxLog(c, 'ساخت موضوع «' + name + '»'); save(); if (c.id === activeChatId) renderMessages(false); nxTopicsSheet(c);
   });
 }
@@ -2121,6 +2128,7 @@ wrap('renderAvatarPicker', o => function (tab) {
   wrap('openSheet', o => function () {
     const box = $('#sheet-content'); if (box) box.classList.remove('x-menu', 'x-create', 'x-stats');
     const r = o.apply(this, arguments);
+    if (!NX_NEWUI) return r;
     try { if (box && box.querySelector(':scope > [data-nt]')) { buildNew(box); box.classList.add('x-menu'); return r; } } catch (e) { console.error(e); }
     try {
       const c = getChat(activeChatId);
@@ -2142,6 +2150,7 @@ wrap('renderAvatarPicker', o => function (tab) {
   addEventListener('resize', () => { if (fitFn) fitFn(); });
   function buildInfo(c) {
     const body = $('#info-body'); if (!body || body.querySelector('.x-itabs')) return;
+    body.classList.add('x-ni');
     const hero = body.querySelector(':scope > .info-hero'); if (!hero) return;
 
     // آمار (تعداد اعضا، تاریخ عضویت) کنار هم به‌صورت چیپ
@@ -2209,7 +2218,7 @@ wrap('renderAvatarPicker', o => function (tab) {
   }
   wrap('renderInfo', o => function () {
     const r = o.apply(this, arguments);
-    try { const c = getChat(infoChatId); if (c) buildInfo(c); } catch (e) { console.error(e); }
+    try { const ib = $('#info-body'); if (ib) ib.classList.remove('x-ni'); const c = getChat(infoChatId); if (c && NX_NEWUI) buildInfo(c); } catch (e) { console.error(e); }
     return r;
   });
 })();
@@ -2342,7 +2351,7 @@ wrap('renderAvatarPicker', o => function (tab) {
         d.dataset.xvip = '1';
         const ref = $('[data-clact="verified"]', box); ref ? ref.after(d) : box.appendChild(d);
       }
-      build(box, c); box.classList.add('x-menu');
+      if (NX_NEWUI) { build(box, c); box.classList.add('x-menu'); }
     } catch (e) { console.error(e); }
     return r;
   });
@@ -2474,8 +2483,8 @@ wrap('renderAvatarPicker', o => function (tab) {
     setTimeout(() => inp.focus(), 250);
   }
   wrap('promptChatName', o => function (type) {
-    if (type === 'private') return openPrivate();
-    if (type === 'channel' || type === 'group') return openCreate(type);
+    if (NX_NEWUI && type === 'private') return openPrivate();
+    if (NX_NEWUI && (type === 'channel' || type === 'group')) return openCreate(type);
     return o.apply(this, arguments);
   });
 })();
