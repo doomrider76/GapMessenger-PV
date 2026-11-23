@@ -12,13 +12,58 @@ const icon = (n, s = 20) => `<svg width="${s}" height="${s}"><use href="#i-${n}"
 const KEY = 'pisfon_v3', BACKUP_KEY = 'pisfon_backup_auto', VERSION_KEY = 'pisfon_version';
 const APP_VERSION = '1.0.4';
 
+// --- تاریخ و عدد فارسی (سریع، بدون Intl) ---
+// اولین استفاده از Intl فارسی ۳۰ تا ۵۰ میلی‌ثانیه از شروع برنامه می‌خورد؛ برای حالت‌های پرکاربرد محاسبه‌ی مستقیم می‌کنیم
+// و برای بقیه‌ی حالت‌ها همان توابع اصلی مرورگر (با کش فرمت‌کننده) استفاده می‌شود.
+const FA_DIG = '۰۱۲۳۴۵۶۷۸۹';
+const FA_MONTHS = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+const toFaDigits = v => String(v).replace(/\d/g, c => FA_DIG[c]);
+function jalaliParts(ts) {
+  const d = new Date(ts), g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  const gy = d.getFullYear() - 1600, gm = d.getMonth() + 1, gd = d.getDate();
+  const gy2 = gm > 2 ? gy + 1 : gy;
+  let days = 365 * gy + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+  let jy = 979 + 33 * Math.floor(days / 12053); days %= 12053;
+  jy += 4 * Math.floor(days / 1461); days %= 1461;
+  if (days > 365) { jy += Math.floor((days - 1) / 365); days = (days - 1) % 365; }
+  return days < 186 ? [jy, Math.floor(days / 31), 1 + days % 31] : [jy, 6 + Math.floor((days - 186) / 30), 1 + (days - 186) % 30];   // ماه از صفر
+}
+(() => {
+  const nl = Number.prototype.toLocaleString, tl = Date.prototype.toLocaleTimeString, dl = Date.prototype.toLocaleDateString, fmts = {};
+  const slow = (self, name, orig, a) => {
+    const o = a[1], k = name + JSON.stringify(o);
+    return (fmts[k] || (fmts[k] = new Intl.DateTimeFormat('fa-IR', o))).format(self);
+  };
+  Number.prototype.toLocaleString = function (loc, opt) {
+    const n = +this;
+    if (loc === 'fa-IR' && opt === undefined && Number.isSafeInteger(n) && n >= 0) return toFaDigits(String(n).replace(/\B(?=(\d{3})+$)/g, '٬'));
+    return nl.apply(this, arguments);
+  };
+  Date.prototype.toLocaleTimeString = function (loc, opt) {
+    if (loc === 'fa-IR' && opt && !isNaN(this)) {
+      const k = Object.keys(opt).sort().join();
+      if (k === 'hour,minute' && opt.hour === '2-digit' && opt.minute === '2-digit') return toFaDigits(String(this.getHours()).padStart(2, '0') + ':' + String(this.getMinutes()).padStart(2, '0'));
+      return slow(this, 't', tl, arguments);
+    }
+    return tl.apply(this, arguments);
+  };
+  Date.prototype.toLocaleDateString = function (loc, opt) {
+    if (loc === 'fa-IR' && opt && !isNaN(this)) {
+      const k = Object.keys(opt).sort().join(), p = (k === 'day,month' || k === 'day,month,year') ? jalaliParts(this.getTime()) : null;
+      if (p && opt.day === 'numeric' && opt.month === 'long' && k === 'day,month') return toFaDigits(p[2]) + ' ' + FA_MONTHS[p[1]];
+      if (p && opt.day === 'numeric' && opt.month === 'long' && opt.year === 'numeric') return toFaDigits(p[2]) + ' ' + FA_MONTHS[p[1]] + ' ' + toFaDigits(p[0]);
+      if (p && opt.day === 'numeric' && opt.month === 'numeric' && k === 'day,month') return toFaDigits(p[1] + 1) + '/' + toFaDigits(p[2]);
+      return slow(this, 'd', dl, arguments);
+    }
+    return dl.apply(this, arguments);
+  };
+})();
+
 // --- تاریخ عضویت (شمسی) ---
 function getPersianDate(ts = Date.now()) {
   try {
-    const parts = new Intl.DateTimeFormat('fa-IR', { month: 'long', year: 'numeric' }).formatToParts(new Date(ts));
-    const month = parts.find(p => p.type === 'month')?.value || '';
-    const year = parts.find(p => p.type === 'year')?.value || '';
-    return `\u200F${month} ${year}`;
+    const p = jalaliParts(ts);
+    return `\u200F${FA_MONTHS[p[1]]} ${toFaDigits(p[0])}`;
   } catch { return 'نامشخص'; }
 }
 
@@ -3511,8 +3556,9 @@ function promptChatName(type) {
     if (type === 'group' || type === 'channel') {
       const def = type === 'group' ? '4' : '100';
       setTimeout(() => {
-        showPrompt('تعداد اعضا', def, num => {
-          const n = parseInt(num, 10);
+        showPrompt('تعداد اعضا (حداکثر ' + memberCap({ type }).toLocaleString('fa-IR') + ')', def, num => {
+          const n = parseInt(num, 10), cap = memberCap({ type });
+          if (!isNaN(n) && n > cap) { toast('تعداد اعضا نمی‌تواند بیشتر از ' + cap.toLocaleString('fa-IR') + ' باشد', 'error'); return; }
           const cnt = (isNaN(n) || n < 0) ? 0 : Math.min(n, 9999999);
           data.members = cnt;
           if (type === 'group') {
