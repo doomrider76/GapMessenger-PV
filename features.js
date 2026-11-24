@@ -471,11 +471,17 @@ document.addEventListener('click', e => {
 function adminPanel() {
     if (!isAdmin()) return;
     const rep = FX().reports.filter(r => r.open);
+    const reqs = (state.badgeReqs || []).filter(r => r.status === 'pending').slice().reverse();
+    const KINDS = { blue: 'سرشناس', yellow: 'سازمانی', green: 'تجاری', personal: 'شخصی' };
+    const WORD = { user: 'حساب', channel: 'کانال', group: 'گروه' };
     const warns = [];
     accounts().forEach(a => (a.chats || []).forEach(c => (c.messages || []).forEach(m => { if (m.isWarning) warns.push({ to: a.name, by: m.warnBy, reason: m.warnReason, ts: m.ts }); })));
     warns.sort((x, y) => y.ts - x.ts);
     const card = (h, s, a) => `<div class="fx-card"><div class="h">${h}</div>${s ? `<div class="s">${s}</div>` : ''}${a ? `<div class="a">${a}</div>` : ''}</div>`;
     const html = `<div class="sheet-title">پنل مدیریت</div>
+        <div class="fx-sec">درخواست‌های نشان تایید (${faNum(reqs.length)})</div>
+        ${reqs.map(r => { const w = WORD[r.targetType || (r.target === 'me' ? 'user' : 'group')] || 'حساب', by = r.by || {}; return card(`${esc(by.name || '—')}${by.username ? ` <span dir="ltr">@${esc(by.username)}</span>` : ''} · نشان ${w} ${KINDS[r.kind] || ''}`, `${r.targetType && r.targetType !== 'user' ? '«' + esc(r.targetName || '') + '»<br>' : ''}${esc(r.reason || '')}<br>${ago(r.ts)}`,
+            `<button class="fx-btn on" data-fxa="badge-ok" data-id="${r.id}">تایید نشان</button><button class="fx-btn red" data-fxa="badge-no" data-id="${r.id}">رد درخواست</button>`); }).join('') || '<div class="fx-empty">درخواستی نیست</div>'}
         <div class="fx-sec">گزارش‌های باز (${faNum(rep.length)})</div>
         ${rep.map(r => card(`${esc(r.name)}${r.username ? ` <span dir="ltr">@${esc(r.username)}</span>` : ''} · ${esc(r.reason)}`, `${esc(r.preview)}${r.preview ? '<br>' : ''}گزارش‌دهنده: ${esc(r.by)} · ${ago(r.ts)}`,
             `<button class="fx-btn red" data-fxa="ban" data-id="${r.id}">بن</button><button class="fx-btn" data-fxa="dismiss" data-id="${r.id}">رد گزارش</button>`)).join('') || '<div class="fx-empty">گزارشی نیست</div>'}
@@ -489,6 +495,19 @@ function adminPanel() {
     openSheet(html);
     $$('#sheet-content [data-fxa]').forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.fxa, id = b.dataset.id;
+        if (act === 'badge-ok' || act === 'badge-no') {
+            const r = (state.badgeReqs || []).find(x => x.id === id); if (!r || r.status !== 'pending') return;
+            const ok = act === 'badge-ok', acc = resolveAccount(r.by);
+            r.status = ok ? 'approved' : 'rejected'; r.decidedBy = M().username || M().name; r.decidedAt = Date.now(); r.seen = false;
+            if (ok) {
+                // نشان فقط اینجا و با تأیید مدیر داده می‌شود (روی همه‌ی اکانت‌ها همگام می‌شود)
+                if (r.target === 'me') { if (acc) setBadgeEverywhere(acc, r.kind); }
+                else { const ch = accounts().flatMap(a => a.chats || []).find(c => c.id === r.target); if (ch) setBadgeEverywhere(ch, r.kind); }
+            }
+            if (acc && acc !== state.me) pushNotif(acc, 'badge', ok ? 'درخواست نشان تو تایید شد' : 'درخواست نشان تو رد شد', null);
+            else if (acc === state.me) r.seen = true;
+            toast(ok ? 'نشان به حساب داده شد ✓' : 'درخواست رد شد', ok ? 'success' : 'info');
+        }
         if (act === 'dismiss') { const r = FX().reports.find(x => x.id === id); if (r) r.open = false; }
         if (act === 'unban') { state.bannedUsers = state.bannedUsers.filter(x => x !== id); toast('بن برداشته شد', 'success'); }
         if (act === 'ban') {
@@ -531,10 +550,10 @@ function adminPanel() {
             <div class="fx-hint">${a.isPrivate ? 'پیام افراد تأییدنشده به‌صورت «درخواست» می‌آید و بعد از تأیید شما تحویل داده می‌شود.' : 'اگر حساب را خصوصی کنید، فقط کسانی که تأیید کرده‌اید می‌توانند مستقیم پیام بدهند.'}</div>
             <div class="section-title">${isAdmin() ? 'مدیریت' : 'نقش'}</div>
             <div class="group">
-              ${isAdmin() ? `<div class="row" data-act="fx-admin"><span class="r-icon" style="background:#f59e0b">${icon('settings-outline', 20)}</span><span class="r-text">پنل مدیریت</span><span class="r-val">${faNum(FX().reports.filter(r => r.open).length)} گزارش</span><span class="chev">${icon('chevron', 18)}</span></div>` : ''}
+              ${isAdmin() ? `<div class="row" data-act="fx-admin"><span class="r-icon" style="background:#f59e0b">${icon('settings-outline', 20)}</span><span class="r-text">پنل مدیریت</span><span class="r-val">${faNum(FX().reports.filter(r => r.open).length + (state.badgeReqs || []).filter(r => r.status === 'pending').length)} گزارش</span><span class="chev">${icon('chevron', 18)}</span></div>` : ''}
               <div class="row"><span class="r-icon" style="background:#6c6c6e">${icon('user', 20)}</span><span class="r-text">نقش این اکانت</span><span class="r-val">${isAdmin() ? 'مدیر' : 'کاربر عادی'}</span></div>
             </div>`;
-        if (anchor) [...sec.childNodes].reverse().forEach(n => anchor.before(n)); else body.appendChild(sec);
+        if (anchor) [...sec.childNodes].forEach(n => anchor.before(n)); else [...sec.childNodes].forEach(n => body.appendChild(n));   // ترتیب درست؛ قبلاً برعکس می‌شد و ردیف «پنل مدیریت» گم می‌شد
     };
     $('#settings-body').addEventListener('click', e => {
         const row = e.target.closest('[data-act]'); if (!row) return;
