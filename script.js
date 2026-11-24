@@ -119,6 +119,10 @@ const MEMBER_POOL = [
 ];
 const REPLIES = ['باشه 👍','چه جالب!','الان چک می‌کنم','مرسی 🙏','کاملاً موافقم','بعداً حرف می‌زنیم','عالیه!','دقیقاً','ممنون از پیامت','می‌شه بیشتر توضیح بدی؟','حتماً چشم','من هم همین فکر رو می‌کردم','خبر خوبیه!','🤔','😄'];
 const AI_SYS = 'تو دستیار هوشمند گپ هستی. جواب‌ها رو کوتاه (حداکثر ۲ خط)، دوستانه، فارسی خودمونی بده.';
+const REPLIES_EN = ['Okay 👍','How interesting!','Let me check','Thanks 🙏','Totally agree','Let’s talk later','Great!','Exactly','Thanks for your message','Can you explain more?','Sure thing','I was thinking the same','Good news!','🤔','😄'];
+const AI_SYS_EN = 'You are Gap’s smart assistant. Keep answers short (at most 2 lines) and friendly, in casual English.';
+const isEn = () => !!(typeof state !== 'undefined' && state && state.settings && state.settings.xlang === 'en');
+const pickReply = () => { const a = isEn() ? REPLIES_EN : REPLIES; return a[Math.floor(Math.random() * a.length)]; };
 const AI_URL = 'https://text.pollinations.ai/';
 
 const EMOJIS = {
@@ -919,7 +923,7 @@ async function fetchAI(userMsg, history = [], sys = null) {
       const ctx = history.slice(-6).map(m => (m.out ? 'کاربر: ' : (m.sender||'دستیار')+': ') + m.text).join('\n');
       prompt = `تاریخچه:\n${ctx}\n\nپیام جدید: ${userMsg}`;
     }
-    const url = AI_URL + encodeURIComponent(prompt) + '?model=openai&system=' + encodeURIComponent(sys || AI_SYS);
+    const url = AI_URL + encodeURIComponent(prompt) + '?model=openai&system=' + encodeURIComponent(sys || (isEn() ? AI_SYS_EN : AI_SYS));
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 20000);
     const res = await fetch(url, {signal:ctrl.signal});
@@ -1036,6 +1040,8 @@ function syncBadgesFromAccounts() {
 
 function isWarnerChat(chat) {
   if (!state.globalWarner || !chat) return false;
+  // کانال/گروهی که خودم سازنده یا مدیرش هستم (مثل کانال رسمی «گپ») هیچ‌وقت قفل نمی‌شود؛ مدیر باید بتواند در کانال خودش پست بگذارد
+  if ((chat.type === 'channel' || chat.type === 'group') && (chat.isGap || (chat.admins || []).includes(state.me.name) || !chat.owner || chat.owner.name === state.me.name)) return false;
   return (chat.username && state.globalWarner.username && normUser(chat.username) === normUser(state.globalWarner.username)) ||
          (!chat.username && state.globalWarner.name === chat.name);
 }
@@ -2452,9 +2458,9 @@ async function scheduleAIReply(chat, userMsg) {
       if (activeChatId === c.id) { renderChatHeader(); renderMessages(); }
       save();
       const history = c.messages.filter(x => x.type === 'text' && !x.deleted).slice(-6).map(x => ({out:x.out, text:x.text, sender:x.sender}));
-      const prompt = `تو نقش «${member.name}» رو داری، عضو گروه «${c.name}» هستی. کوتاه (۲ خط)، فارسی خودمونی، دوستانه.`;
+      const prompt = isEn() ? `You play “${member.name}”, a member of the group “${c.name}”. Reply briefly (2 lines), in casual, friendly English.` : `تو نقش «${member.name}» رو داری، عضو گروه «${c.name}» هستی. کوتاه (۲ خط)، فارسی خودمونی، دوستانه.`;
       let reply = await fetchAI(userMsg, history, prompt);
-      if (!reply) reply = ['😄','👌','موافقم','دمت گرم','باشه','چه جالب!','منم همینطور','عالیه!','😅','🚀'][Math.floor(Math.random()*10)];
+      if (!reply) reply = (isEn() ? ['😄','👌','Agreed','Nice one','Okay','How interesting!','Same here','Great!','😅','🚀'] : ['😄','👌','موافقم','دمت گرم','باشه','چه جالب!','منم همینطور','عالیه!','😅','🚀'])[Math.floor(Math.random()*10)];
       c.typing = false; c.typingSender = null;
       const rm = { id:rid(), text:reply, out:false, ts:Date.now(), type:'text', replyTo:null, sender:member.name, reactions:{}, deleted:false, editedForAll:false, seenCount:0, seenTarget:0, linkPreview:null, _fakeReactionCounts:{} };
       const u = firstUrl(reply); if (u) rm.linkPreview = buildLinkPreview(u);
@@ -2473,7 +2479,7 @@ async function scheduleAIReply(chat, userMsg) {
   save();
   const history = c.messages.filter(x => x.type === 'text' && !x.deleted).slice(-8, -1);
   let reply = await fetchAI(userMsg, history);
-  if (!reply) { reply = REPLIES[Math.floor(Math.random()*REPLIES.length)]; if (chat.type === 'ai') reply = '⚠️ اتصال ممکن نشد.\n' + reply; }
+  if (!reply) { reply = pickReply(); if (chat.type === 'ai') reply = (isEn() ? '⚠️ Couldn’t connect.\n' : '⚠️ اتصال ممکن نشد.\n') + reply; }
   c.typing = false;
   const rm = { id:rid(), text:reply, out:false, ts:Date.now(), type:'text', replyTo:null, sender:null, reactions:{}, deleted:false, editedForAll:false, seenCount:0, seenTarget:0, linkPreview:null, _fakeReactionCounts:{} };
   const u = firstUrl(reply); if (u) rm.linkPreview = buildLinkPreview(u);
@@ -2500,7 +2506,7 @@ function scheduleReply(chat) {
         const mem = c.membersList[Math.floor(Math.random()*c.membersList.length)];
         sender = mem.name;
       }
-      const reply = REPLIES[Math.floor(Math.random()*REPLIES.length)];
+      const reply = pickReply();
       const msg = { id:rid(), text:reply, out:false, ts:Date.now(), type:'text', replyTo:null, sender, reactions:{}, deleted:false, editedForAll:false, seenCount:0, seenTarget:0, linkPreview:null, _fakeReactionCounts:{} };
       const u = firstUrl(reply); if (u) msg.linkPreview = buildLinkPreview(u);
       c.messages.push(msg);
@@ -4011,7 +4017,7 @@ function pushAIComment(chat, m, member, text) {
   if (cmtCtx && cmtCtx.msgId === m.id) renderCommentList(false);
 }
 function commentSystemPrompt(chat, m, member) {
-  return `تو «${member.name}» هستی، یکی از اعضای کانال «${chat.name}» که زیر یک پست نظر می‌نویسه. فقط خودِ نظرت رو بنویس، کوتاه (حداکثر ۲ خط)، فارسی خودمونی و طبیعی. اسم خودت یا توضیح اضافه ننویس.`;
+  return isEn() ? `You are “${member.name}”, a member of the channel “${chat.name}”, commenting under a post. Write only your comment, short (2 lines at most), natural casual English. Don’t add your name or any explanation.` : `تو «${member.name}» هستی، یکی از اعضای کانال «${chat.name}» که زیر یک پست نظر می‌نویسه. فقط خودِ نظرت رو بنویس، کوتاه (حداکثر ۲ خط)، فارسی خودمونی و طبیعی. اسم خودت یا توضیح اضافه ننویس.`;
 }
 async function aiComment(chat, m, userMsg) {
   const hist = (m.comments || []).slice(-6).map(c => ({ out: c.uid === state.me.id && !c.ai, text: c.text, sender: c.author }));
@@ -4025,7 +4031,7 @@ async function aiComment(chat, m, userMsg) {
     reply = await fetchAI(userMsg || ('پست کانال: ' + post), hist, commentSystemPrompt(chat, m, who));
     if (reply) reply = reply.replace(/^[«"]?[^:\n]{1,12}[:：]\s*/, '').trim().slice(0, 300);
   }
-  if (!reply) reply = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+  if (!reply) reply = pickReply();
   return { who, reply };
 }
 /* بعد از انتشار پست: چند نظر خودکار با فاصله‌ی زمانی */
@@ -4062,7 +4068,7 @@ async function aiReplyToComment(chat, m, userText) {
         reply = await fetchAI(userText, hist, commentSystemPrompt(c, m, pick) + ' پست: ' + (pinPreview(m) || ''));
         if (reply) reply = reply.replace(/^[«"]?[^:\n]{1,12}[:：]\s*/, '').trim().slice(0, 300);
       } else await new Promise(r => setTimeout(r, 1200));
-      if (!reply) reply = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+      if (!reply) reply = pickReply();
       cmtTyping = null;
       pushAIComment(c, m, pick, reply);
       if (i < n - 1) await new Promise(r => setTimeout(r, 1200 + Math.random() * 1500));
